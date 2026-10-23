@@ -1,0 +1,1343 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Knob-driven teleprompter with scroll and take modes.">
+<meta name="theme-color" content="#000000">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Cueline">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<style>
+html { color-scheme: light; }
+body { margin: 0; font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; -webkit-text-size-adjust: 100%; }
+img { max-width: 100%; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<title>Cueline</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: editor = script list beside a writing surface; prompter = black stage (mirrored as one unit) with a fixed amber eyeline, HUD docked at the bottom edge for the operator. */
+:root {
+  --bg: #EEF0F2;
+  --surface: #FFFFFF;
+  --fg: #16191D;
+  --muted: #5D6570;
+  --line: #D5D9DE;
+  --accent: #B86E00;
+  --accent-fg: #FFFFFF;
+  --tally: #D23B36;
+  --stage-bg: #000000;
+  --stage-fg: #F4F4F0;
+  --stage-dim: #7E858E;
+  --eye: #F2A93B;
+  --good: #57D08A;
+  --ng: #FF5A52;
+  --hud: rgba(20, 22, 26, 0.94);
+  --hud-fg: #E9ECEF;
+  --hud-dim: #A9B1BB;
+  --hud-line: #2E333B;
+  --font-read: "Atkinson Hyperlegible", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --r: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0E1013; --surface: #171A1F; --fg: #E9ECEF; --muted: #8C95A1;
+    --line: #2A2F37; --accent: #F2A93B; --accent-fg: #1A1200; --tally: #FF5A52;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0E1013; --surface: #171A1F; --fg: #E9ECEF; --muted: #8C95A1;
+  --line: #2A2F37; --accent: #F2A93B; --accent-fg: #1A1200; --tally: #FF5A52;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body {
+  background: var(--bg); color: var(--fg);
+  font-family: var(--font-read); font-size: 16px; line-height: 1.5;
+}
+button, input, textarea, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ---------- Editor ---------- */
+.editor {
+  min-height: 100%;
+  display: flex; flex-direction: column;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-top: calc(16px + env(safe-area-inset-top, 0px));
+  padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  gap: 16px;
+  max-width: 1180px; margin: 0 auto; box-sizing: border-box;
+}
+.install {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  background: var(--surface); border: 1px solid var(--accent); border-radius: var(--r);
+  padding: 10px 12px 10px 16px; font-size: 0.95rem;
+}
+.install span { flex: 1; min-width: 200px; }
+.bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.brand { display: flex; align-items: baseline; gap: 10px; margin-right: auto; }
+.brand h1 { font-size: 1.5rem; margin: 0; letter-spacing: -0.01em; }
+.brand .tally { width: 10px; height: 10px; border-radius: 50%; background: var(--tally); align-self: center; }
+.brand small { font-family: var(--font-mono); font-size: 0.72rem; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; }
+.btn {
+  border: 1px solid var(--line); background: var(--surface); border-radius: 8px;
+  padding: 9px 14px; font-size: 0.95rem; display: inline-flex; align-items: center; gap: 8px;
+}
+.btn:hover { border-color: var(--muted); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); font-weight: 700; padding-inline: 18px; }
+.btn.ghost { background: transparent; }
+.btn.danger.armed { background: var(--tally); border-color: var(--tally); color: #fff; }
+
+.workspace { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 16px; flex: 1; min-height: 0; }
+.list { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.list .label { font-family: var(--font-mono); font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); padding: 4px 10px; }
+.item {
+  text-align: left; border: 0; background: transparent; border-radius: 8px; padding: 10px 12px;
+  display: flex; flex-direction: column; gap: 2px; min-width: 0;
+}
+.item:hover { background: var(--surface); }
+.item.active { background: var(--surface); box-shadow: inset 3px 0 0 var(--accent); }
+.item .t { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.item .m { font-family: var(--font-mono); font-size: 0.72rem; color: var(--muted); }
+
+.edit {
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r);
+  display: flex; flex-direction: column; min-width: 0; min-height: 60vh;
+}
+.edit-head { display: flex; gap: 8px; align-items: center; padding: 10px 12px 10px 18px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.edit-head input { flex: 1; min-width: 160px; border: 0; background: transparent; font-size: 1.2rem; font-weight: 700; padding: 6px 0; }
+.edit-head input:focus { outline: none; }
+textarea#body {
+  flex: 1; border: 0; background: transparent; resize: none; padding: 18px;
+  font-size: 1.05rem; line-height: 1.65; min-height: 50vh; box-sizing: border-box; width: 100%;
+}
+textarea#body:focus { outline: none; }
+.edit-foot {
+  display: flex; gap: 18px; flex-wrap: wrap; padding: 10px 18px; border-top: 1px solid var(--line);
+  font-family: var(--font-mono); font-size: 0.78rem; color: var(--muted); font-variant-numeric: tabular-nums;
+}
+.edit-foot b { color: var(--fg); font-weight: 500; }
+
+.help { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px 18px; min-width: 0; }
+.panel h2 { font-size: 1rem; margin: 0 0 10px; }
+.panel p { margin: 0 0 10px; color: var(--muted); max-width: 62ch; }
+.keys { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+.keys td { padding: 6px 0; border-top: 1px solid var(--line); vertical-align: top; }
+.keys td:first-child { width: 40%; padding-right: 10px; }
+kbd {
+  font-family: var(--font-mono); font-size: 0.76rem; border: 1px solid var(--line); border-bottom-width: 2px;
+  border-radius: 5px; padding: 1px 6px; background: var(--bg); white-space: nowrap;
+}
+.syntax code { font-family: var(--font-mono); font-size: 0.85rem; background: var(--bg); padding: 1px 5px; border-radius: 4px; }
+.syntax ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
+
+@media (max-width: 980px) { .help { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+@media (max-width: 760px) {
+  .workspace { grid-template-columns: minmax(0, 1fr); }
+  .list { flex-direction: row; overflow-x: auto; padding-bottom: 4px; }
+  .list .label { display: none; }
+  .item { flex: 0 0 auto; max-width: 200px; }
+  .item.active { box-shadow: inset 0 -3px 0 var(--accent); }
+  .help { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* ---------- Prompter ---------- */
+.prompter {
+  position: fixed; inset: 0; z-index: 50; background: var(--stage-bg); color: var(--stage-fg);
+  overflow: hidden; touch-action: none; outline: none; cursor: default;
+}
+.prompter.hide-cursor { cursor: none; }
+.stage { position: absolute; inset: 0; }
+.scroller { position: absolute; left: 0; right: 0; top: 0; will-change: transform; }
+.copy {
+  margin: 0 auto; box-sizing: border-box;
+  font-family: var(--font-read); font-weight: 700; color: var(--stage-fg);
+  padding-bottom: 100vh;
+}
+.copy p { margin: 0 0 0.9em; }
+.copy .cue {
+  font-family: var(--font-mono); font-weight: 500; font-size: 0.32em; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--eye); margin: 1.6em 0 0.6em; display: flex; align-items: center; gap: 0.8em;
+}
+.copy .cue::after { content: ""; flex: 1; height: 2px; background: currentColor; opacity: 0.35; }
+.copy .dir { color: var(--stage-dim); font-weight: 400; font-style: italic; }
+.copy .end {
+  font-family: var(--font-mono); font-size: 0.3em; letter-spacing: 0.2em; color: var(--stage-dim);
+  text-transform: uppercase; margin-top: 2em;
+}
+.copy.takes .beat { opacity: 0.26; transition: opacity 0.2s ease; }
+.copy.takes .beat.cur { opacity: 1; }
+.copy.takes .beat p { margin-bottom: 0.7em; }
+.copy .tag {
+  font-family: var(--font-mono); font-weight: 500; font-size: 0.28em; letter-spacing: 0.1em;
+  color: var(--stage-dim); text-transform: uppercase; margin-bottom: 0.4em; display: flex; gap: 1.2em; flex-wrap: wrap;
+}
+.copy .tag .g { color: var(--good); }
+.copy .tag .x { color: var(--ng); }
+
+.fade-top, .fade-bot { position: absolute; left: 0; right: 0; pointer-events: none; }
+.fade-top { top: 0; height: 18%; background: linear-gradient(var(--stage-bg), transparent); }
+.fade-bot { bottom: 0; height: 22%; background: linear-gradient(transparent, var(--stage-bg)); }
+.eyeline { position: absolute; left: 0; right: 0; height: 0; pointer-events: none; }
+.eyeline::before, .eyeline::after {
+  content: ""; position: absolute; top: -14px;
+  border-top: 14px solid transparent; border-bottom: 14px solid transparent;
+}
+.eyeline::before { left: 0; border-left: 18px solid var(--eye); }
+.eyeline::after { right: 0; border-right: 18px solid var(--eye); }
+.eyeline .band { position: absolute; left: 0; right: 0; top: -1px; height: 2px; background: var(--eye); opacity: 0.18; }
+.prompter.recording .eyeline::before { border-left-color: var(--ng); }
+.prompter.recording .eyeline::after { border-right-color: var(--ng); }
+.prompter.recording .eyeline .band { background: var(--ng); opacity: 0.3; }
+
+.status {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  top: calc(env(safe-area-inset-top, 0px) + 14px);
+  font-family: var(--font-mono); font-weight: 500; font-variant-numeric: tabular-nums;
+  font-size: clamp(14px, 2.2vw, 24px); letter-spacing: 0.06em; white-space: nowrap;
+  padding: 0.35em 0.9em; border-radius: 999px; color: var(--stage-dim); background: rgba(255,255,255,0.06);
+  pointer-events: none;
+}
+.status.rec { color: #fff; background: var(--ng); }
+.status.good { color: #04140a; background: var(--good); }
+.status.note { color: #1A1200; background: var(--eye); }
+
+.countdown {
+  position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none;
+  font-family: var(--font-mono); font-size: min(40vw, 40vh); color: var(--eye); font-weight: 500;
+}
+.slate {
+  position: absolute; inset: 0; background: #FFFFFF; color: #000; display: grid; place-items: center;
+  font-family: var(--font-mono); font-weight: 500; font-size: min(14vw, 18vh); letter-spacing: 0.1em; pointer-events: none;
+}
+
+.hud {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 5;
+  background: var(--hud); color: var(--hud-fg); border-top: 1px solid var(--hud-line);
+  padding-top: 10px;
+  padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  transition: transform 0.25s ease, opacity 0.25s ease;
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+}
+.hud.away { transform: translateY(100%); opacity: 0; pointer-events: none; }
+.grp { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.hb {
+  border: 1px solid var(--hud-line); background: transparent; color: var(--hud-fg);
+  border-radius: 8px; min-width: 44px; height: 44px; padding: 0 12px;
+  display: inline-grid; place-items: center; font-size: 0.95rem;
+}
+.hb:hover { border-color: #59616c; }
+.hb.on { border-color: var(--eye); color: var(--eye); }
+.hb.play { background: var(--eye); border-color: var(--eye); color: #1A1200; font-weight: 700; min-width: 96px; }
+.hb.rec { background: transparent; border-color: var(--ng); color: var(--ng); font-weight: 700; min-width: 104px; }
+.hb.rec.live { background: var(--ng); color: #fff; }
+.hb.good { border-color: var(--good); color: var(--good); }
+.hb.ng { border-color: #5a3a3a; color: #ff9a95; }
+.hb svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.seg { display: inline-flex; border: 1px solid var(--hud-line); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; background: transparent; color: var(--hud-dim); height: 42px; padding: 0 12px; font-size: 0.88rem; }
+.seg button.on { background: #2a2f37; color: var(--hud-fg); }
+.readout {
+  font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 0.78rem; line-height: 1.25;
+  display: flex; gap: 14px; padding: 0 6px; color: var(--hud-dim);
+}
+.readout b { display: block; color: var(--hud-fg); font-size: 1.02rem; font-weight: 500; }
+.spacer { flex: 1; }
+.keydot { width: 8px; height: 8px; border-radius: 50%; background: #3a4048; transition: background 0.3s; }
+.keydot.hit { background: var(--eye); transition: none; }
+.progress { position: absolute; left: 0; right: 0; top: 0; height: 3px; }
+.progress i { display: block; height: 100%; background: var(--eye); width: 0; opacity: 0.7; }
+
+.sheet {
+  position: absolute; z-index: 6; right: max(12px, env(safe-area-inset-right, 0px));
+  bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+  width: min(380px, calc(100vw - 32px)); max-height: 72vh; overflow-y: auto;
+  background: var(--hud); color: var(--hud-fg); border: 1px solid var(--hud-line); border-radius: 12px;
+  padding: 16px; display: grid; gap: 14px; box-sizing: border-box; align-content: start;
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+}
+.sheet.wide { width: min(640px, calc(100vw - 32px)); }
+.sheet h3 { margin: 0; font-size: 0.72rem; font-family: var(--font-mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--hud-dim); font-weight: 500; }
+.row { display: grid; grid-template-columns: 110px minmax(0, 1fr) 52px; align-items: center; gap: 10px; font-size: 0.92rem; }
+.row output { font-family: var(--font-mono); font-size: 0.8rem; text-align: right; font-variant-numeric: tabular-nums; color: var(--hud-dim); }
+.row input[type=range] { width: 100%; accent-color: var(--eye); }
+.toggles { display: flex; flex-wrap: wrap; gap: 8px; }
+.keytest {
+  font-family: var(--font-mono); font-size: 0.82rem; border: 1px dashed var(--hud-line); border-radius: 8px;
+  padding: 10px 12px; color: var(--hud-dim);
+}
+.keytest b { color: var(--eye); font-weight: 500; }
+.sumline { font-family: var(--font-mono); font-size: 0.85rem; color: var(--hud-dim); font-variant-numeric: tabular-nums; }
+.sumline b { color: var(--hud-fg); font-weight: 500; }
+.field { display: grid; gap: 4px; font-size: 0.85rem; color: var(--hud-dim); min-width: 0; }
+.field select { background: #1b1f25; border: 1px solid var(--hud-line); border-radius: 8px; height: 40px; padding: 0 10px; color: var(--hud-fg); }
+.fields { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+.hint { font-size: 0.82rem; color: var(--hud-dim); margin: 0; line-height: 1.45; }
+.logwrap { max-height: 34vh; overflow: auto; border: 1px solid var(--hud-line); border-radius: 8px; }
+.log { width: 100%; border-collapse: collapse; font-family: var(--font-mono); font-size: 0.78rem; font-variant-numeric: tabular-nums; }
+.log th { position: sticky; top: 0; background: #1b1f25; text-align: left; font-weight: 500; color: var(--hud-dim); padding: 6px 8px; }
+.log td { padding: 6px 8px; border-top: 1px solid var(--hud-line); white-space: nowrap; }
+.log td.txt { white-space: normal; color: var(--hud-dim); min-width: 160px; font-family: var(--font-read); font-size: 0.8rem; }
+.mk { border: 1px solid var(--hud-line); background: transparent; color: var(--hud-dim); border-radius: 6px; padding: 2px 8px; font-family: var(--font-mono); font-size: 0.72rem; }
+.mk.good { color: var(--good); border-color: var(--good); }
+.mk.ng { color: var(--ng); border-color: var(--ng); }
+.empty { padding: 14px; color: var(--hud-dim); font-size: 0.85rem; }
+.exportbox { width: 100%; height: 120px; box-sizing: border-box; background: #0d0f12; color: var(--hud-fg); border: 1px solid var(--hud-line); border-radius: 8px; font-family: var(--font-mono); font-size: 0.72rem; padding: 8px; }
+.btnrow { display: flex; flex-wrap: wrap; gap: 8px; }
+.hb.danger.armed { background: var(--ng); border-color: var(--ng); color: #fff; }
+@media (max-width: 640px) {
+  .readout .opt { display: none; }
+  .hb.play { min-width: 72px; }
+  .fields { grid-template-columns: minmax(0, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hud, .copy.takes .beat { transition: none; }
+}
+</style>
+
+<div class="editor" id="editor">
+  <div class="install" id="installHint" hidden>
+    <span><b>Full screen on iPad:</b> tap the Share button, then <b>Add to Home Screen</b>, and open Cueline from its icon.</span>
+    <button class="btn ghost" id="installClose" type="button">Got it</button>
+  </div>
+  <div class="bar">
+    <div class="brand"><span class="tally" aria-hidden="true"></span><h1>Cueline</h1><small>Knob prompter</small></div>
+    <button class="btn" id="newBtn" type="button">New script</button>
+    <label class="btn" for="importFile">Import .txt</label>
+    <input type="file" id="importFile" accept=".txt,.md,.text,text/plain" hidden>
+    <button class="btn primary" id="promptBtn" type="button">▶ Prompt</button>
+  </div>
+
+  <div class="workspace">
+    <nav class="list" id="list" aria-label="Scripts"></nav>
+    <section class="edit">
+      <div class="edit-head">
+        <input id="title" type="text" placeholder="Script title" aria-label="Script title">
+        <button class="btn ghost danger" id="delBtn" type="button">Delete</button>
+      </div>
+      <textarea id="body" spellcheck="true" aria-label="Script text" placeholder="Paste or write your script here."></textarea>
+      <div class="edit-foot" id="stats"></div>
+    </section>
+  </div>
+
+  <div class="help">
+    <div class="panel">
+      <h2>Scroll mode</h2>
+      <p>Continuous rolling text. Tap the screen once after opening so the page hears your knob.</p>
+      <table class="keys">
+        <tr><td><kbd>→</kbd> <kbd>←</kbd></td><td>Turn. Rolling: faster / slower. Paused: scrub.</td></tr>
+        <tr><td><kbd>Space</kbd> <kbd>Enter</kbd></td><td>Press. Play / pause.</td></tr>
+        <tr><td><kbd>↓</kbd> <kbd>↑</kbd> wheel</td><td>Nudge one line.</td></tr>
+        <tr><td><kbd>PgDn</kbd> <kbd>PgUp</kbd></td><td>Next / previous section.</td></tr>
+        <tr><td><kbd>Home</kbd> <kbd>R</kbd></td><td>Back to the top.</td></tr>
+        <tr><td><kbd>M</kbd> <kbd>Esc</kbd></td><td>Mirror / leave.</td></tr>
+      </table>
+    </div>
+    <div class="panel">
+      <h2>Take mode</h2>
+      <p>One line at a time, with a timestamped take log you can turn into Resolve markers.</p>
+      <table class="keys">
+        <tr><td><kbd>→</kbd> <kbd>←</kbd></td><td>Turn. Next / previous line.</td></tr>
+        <tr><td>Short press</td><td>Start take. Press again to stop.</td></tr>
+        <tr><td>Long press, <kbd>G</kbd></td><td>Mark the take good. Moves to the next line.</td></tr>
+        <tr><td><kbd>X</kbd></td><td>Mark the take scratch.</td></tr>
+        <tr><td><kbd>S</kbd></td><td>Slate: white flash plus a sync point in the log.</td></tr>
+        <tr><td><kbd>L</kbd></td><td>Open the take log.</td></tr>
+      </table>
+    </div>
+    <div class="panel syntax">
+      <h2>Script markup</h2>
+      <ul>
+        <li><code># Hook</code> on its own line marks a section. Sections show as amber cue labels and are jump targets.</li>
+        <li><code>[beat]</code> or <code>[smile]</code> shows as a dim italic direction.</li>
+        <li>A blank line starts a new paragraph. In take mode each paragraph is one line to shoot, or each line if you choose.</li>
+        <li>Scripts and take logs are kept in this browser on this device.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="prompter" id="prompter" tabindex="-1" hidden>
+  <div class="stage" id="stage">
+    <div class="scroller" id="scroller"><div class="copy" id="copy"></div></div>
+    <div class="fade-top"></div>
+    <div class="fade-bot"></div>
+    <div class="eyeline" id="eyeline"><div class="band"></div></div>
+    <div class="status" id="status" hidden></div>
+    <div class="countdown" id="countdown" hidden></div>
+    <div class="slate" id="slate" hidden></div>
+  </div>
+
+  <div class="sheet" id="sheet" hidden>
+    <h3>Display</h3>
+    <div class="row"><label for="sSize">Text size</label><input id="sSize" type="range" min="28" max="140" step="2"><output id="oSize"></output></div>
+    <div class="row"><label for="sWidth">Line width</label><input id="sWidth" type="range" min="40" max="100" step="2"><output id="oWidth"></output></div>
+    <div class="row"><label for="sLead">Line spacing</label><input id="sLead" type="range" min="1.1" max="2" step="0.05"><output id="oLead"></output></div>
+    <div class="row"><label for="sEye">Eyeline</label><input id="sEye" type="range" min="12" max="60" step="1"><output id="oEye"></output></div>
+    <div class="toggles">
+      <button class="hb" id="tMirror" type="button">Mirror ↔</button>
+      <button class="hb" id="tFlip" type="button">Flip ↕</button>
+      <button class="hb" id="tCount" type="button">3-2-1 start</button>
+      <button class="hb" id="tFull" type="button">Full screen</button>
+    </div>
+    <h3>Take mode</h3>
+    <div class="toggles">
+      <button class="hb" id="tSplit" type="button">Split: paragraphs</button>
+      <button class="hb" id="tAdvance" type="button">Next line on good</button>
+    </div>
+    <h3>Key test</h3>
+    <div class="keytest" id="keytest">Press a key or turn your knob. The last key the page heard shows here.</div>
+  </div>
+
+  <div class="sheet wide" id="logSheet" hidden>
+    <h3>Take log</h3>
+    <div class="sumline" id="logSum"></div>
+    <div class="logwrap" id="logWrap"></div>
+    <h3>Export</h3>
+    <div class="fields">
+      <label class="field" for="zeroSel">Marker zero point
+        <select id="zeroSel"></select>
+      </label>
+      <label class="field" for="fpsSel">Timeline frame rate
+        <select id="fpsSel">
+          <option value="23.976">23.976</option><option value="24">24</option><option value="25">25</option>
+          <option value="29.97">29.97</option><option value="30">30</option><option value="50">50</option>
+          <option value="59.94">59.94</option><option value="60">60</option>
+        </select>
+      </label>
+    </div>
+    <p class="hint" id="zeroHint"></p>
+    <div class="btnrow">
+      <button class="hb" id="saveEdl" type="button">Save Resolve markers</button>
+      <button class="hb" id="saveCsv" type="button">Save CSV log</button>
+      <button class="hb" id="copyEdl" type="button">Copy markers</button>
+      <button class="hb" id="copyCsv" type="button">Copy CSV</button>
+    </div>
+    <p class="hint" id="exportMsg">Markers save as a .txt file. Rename it to .edl, then in Resolve use Timeline › Import › Timeline Markers from EDL.</p>
+    <textarea class="exportbox" id="exportBox" aria-label="Export text" readonly hidden></textarea>
+    <div class="btnrow"><button class="hb danger" id="clearLog" type="button">Clear log</button></div>
+  </div>
+
+  <div class="hud" id="hud">
+    <div class="progress"><i id="prog"></i></div>
+    <div class="seg" role="group" aria-label="Mode">
+      <button type="button" id="mScroll">Scroll</button>
+      <button type="button" id="mTakes">Takes</button>
+    </div>
+
+    <div class="grp" id="gScroll">
+      <button class="hb play" id="playBtn" type="button">Play</button>
+      <button class="hb" id="slower" type="button" aria-label="Slower">−</button>
+      <div class="readout"><span>Speed<b id="rSpeed">0</b></span></div>
+      <button class="hb" id="faster" type="button" aria-label="Faster">+</button>
+      <div class="readout">
+        <span>≈ wpm<b id="rWpm">0</b></span>
+        <span class="opt">Left<b id="rLeft">0:00</b></span>
+      </div>
+    </div>
+
+    <div class="grp" id="gTakes" hidden>
+      <button class="hb" id="prevBeat" type="button" aria-label="Previous line">‹</button>
+      <button class="hb rec" id="takeBtn" type="button">● Take</button>
+      <button class="hb good" id="goodBtn" type="button">✓ Good</button>
+      <button class="hb ng" id="ngBtn" type="button">✕ Scratch</button>
+      <button class="hb" id="nextBeat" type="button" aria-label="Next line">›</button>
+      <div class="readout">
+        <span>Line<b id="rLine">1/1</b></span>
+        <span class="opt">Got<b id="rGot">0</b></span>
+      </div>
+      <button class="hb" id="slateBtn" type="button">Slate</button>
+      <button class="hb" id="logBtn" type="button">Log</button>
+    </div>
+
+    <span class="keydot" id="keydot" title="Flashes when a key arrives"></span>
+    <div class="spacer"></div>
+    <button class="hb" id="restartBtn" type="button" aria-label="Back to top"><svg viewBox="0 0 24 24"><path d="M4 4v6h6"/><path d="M4.5 10A8 8 0 1 1 6 16.5"/></svg></button>
+    <button class="hb" id="setBtn" type="button" aria-label="Display settings"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></button>
+    <button class="hb" id="exitBtn" type="button">Done</button>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const KEY = "cueline.v1";
+
+  const EXAMPLES = [
+    {
+      title: "Example: channel intro",
+      body: "# Hook\nMost people think the hard part of being on camera is the camera. [beat] It isn't. It's remembering what you meant to say.\n\n# Setup\nSo I built a prompter that fits the way I actually work.\n\nOne knob. Turn it to set the pace, press it to pause, turn it again to find my place.\n\n# Payoff\nNo apps fighting each other, no remote that only talks to one brand.\n\n[smile] Just the script, the glass, and me.\n\n# Close\nIf that sounds useful, the build notes are linked below. See you in the next one."
+    },
+    {
+      title: "Example: knob test",
+      body: "# Warm up\nRead this paragraph out loud at your natural pace. While it rolls, turn the knob right to speed up and left to slow down.\n\nPress the knob to pause. Now turn it slowly. The text should step back and forth one notch at a time so you can find your place.\n\n# Section jump\nPage Down jumps here from the warm up. Page Up jumps back.\n\n# Done\nIf every key showed up in the key test panel, your remote is ready."
+    }
+  ];
+
+  const DEFAULTS = {
+    size: 64, width: 82, lead: 1.35, eye: 30, mirror: false, flip: false, count: true, speed: 70,
+    mode: "scroll", split: "para", advance: true, fps: "25", zero: "auto"
+  };
+
+  let store = load();
+  function load() {
+    try {
+      const raw = localStorage.getItem(KEY);
+      if (raw) {
+        const s = JSON.parse(raw);
+        if (s && Array.isArray(s.scripts) && s.scripts.length) {
+          s.settings = Object.assign({}, DEFAULTS, s.settings || {});
+          s.logs = s.logs || {};
+          return s;
+        }
+      }
+    } catch (e) {}
+    const scripts = EXAMPLES.map((x, i) => ({ id: "ex" + i, title: x.title, body: x.body, updated: Date.now() - i * 60000 }));
+    return { scripts, current: scripts[0].id, settings: Object.assign({}, DEFAULTS), logs: {} };
+  }
+  let saveT = 0;
+  function save() {
+    clearTimeout(saveT);
+    saveT = setTimeout(() => { try { localStorage.setItem(KEY, JSON.stringify(store)); } catch (e) {} }, 250);
+  }
+  const S = store.settings;
+  const cur = () => store.scripts.find((s) => s.id === store.current) || store.scripts[0];
+  const logFor = (id) => (store.logs[id] = store.logs[id] || { takes: [], slates: [] });
+
+  /* ---------- Shared helpers ---------- */
+  const words = (t) => (t.replace(/\[[^\]]*\]/g, " ").replace(/^#.*$/gm, " ").match(/\S+/g) || []).length;
+  const fmt = (sec) => {
+    sec = Math.max(0, Math.round(sec));
+    return Math.floor(sec / 60) + ":" + String(sec % 60).padStart(2, "0");
+  };
+  const clock = (t) => {
+    const d = new Date(t);
+    return [d.getHours(), d.getMinutes(), d.getSeconds()].map((n) => String(n).padStart(2, "0")).join(":");
+  };
+  const esc = (t) => t.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const inline = (t) => esc(t).replace(/\[([^\]]+)\]/g, '<span class="dir">[$1]</span>');
+  const plain = (t) => t.replace(/\[[^\]]*\]/g, "").replace(/\s+/g, " ").trim();
+
+  /* Parse a script into cue and paragraph blocks. */
+  function parse(src) {
+    const blocks = [];
+    let para = [];
+    const flush = () => { if (para.length) { blocks.push({ type: "para", lines: para }); para = []; } };
+    String(src || "").replace(/\r/g, "").split("\n").forEach((line) => {
+      const t = line.trim();
+      if (/^#/.test(t)) { flush(); blocks.push({ type: "cue", text: t.replace(/^#+\s*/, "") }); }
+      else if (!t) flush();
+      else para.push(t);
+    });
+    flush();
+    return blocks;
+  }
+  /* Beats are the units shot in take mode. */
+  function beatsOf(blocks, split) {
+    const beats = [];
+    let section = "";
+    blocks.forEach((b) => {
+      if (b.type === "cue") { section = b.text; return; }
+      if (split === "line") b.lines.forEach((l) => beats.push({ section, lines: [l] }));
+      else beats.push({ section, lines: b.lines });
+    });
+    beats.forEach((b, i) => { b.n = i + 1; b.text = plain(b.lines.join(" ")); });
+    return beats;
+  }
+
+  /* ---------- Editor ---------- */
+  function renderList() {
+    const list = $("list");
+    list.innerHTML = '<div class="label">Scripts</div>';
+    [...store.scripts].sort((a, b) => b.updated - a.updated).forEach((s) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "item" + (s.id === store.current ? " active" : "");
+      const w = words(s.body);
+      const lg = store.logs[s.id];
+      const takes = lg ? lg.takes.length : 0;
+      b.innerHTML = '<span class="t"></span><span class="m"></span>';
+      b.querySelector(".t").textContent = s.title || "Untitled";
+      b.querySelector(".m").textContent = w + " words · " + fmt((w / 140) * 60) + (takes ? " · " + takes + " takes" : "");
+      b.addEventListener("click", () => { store.current = s.id; save(); renderAll(); });
+      list.appendChild(b);
+    });
+  }
+  function renderStats() {
+    const s = cur();
+    const w = words(s.body);
+    const blocks = parse(s.body);
+    const cues = blocks.filter((b) => b.type === "cue").length;
+    const lines = beatsOf(blocks, S.split).length;
+    $("stats").innerHTML =
+      "<span><b>" + w + "</b> words</span>" +
+      "<span><b>" + cues + "</b> sections</span>" +
+      "<span><b>" + lines + "</b> lines to shoot</span>" +
+      "<span>at 130 wpm <b>" + fmt((w / 130) * 60) + "</b></span>" +
+      "<span>at 160 wpm <b>" + fmt((w / 160) * 60) + "</b></span>";
+  }
+  function renderAll() {
+    const s = cur();
+    $("title").value = s.title;
+    $("body").value = s.body;
+    renderList();
+    renderStats();
+    disarm($("delBtn"), "Delete");
+  }
+  $("title").addEventListener("input", (e) => { const s = cur(); s.title = e.target.value; s.updated = Date.now(); save(); renderList(); });
+  $("body").addEventListener("input", (e) => { const s = cur(); s.body = e.target.value; s.updated = Date.now(); save(); renderList(); renderStats(); });
+  $("newBtn").addEventListener("click", () => {
+    const s = { id: "s" + Date.now().toString(36), title: "New script", body: "# Hook\n", updated: Date.now() };
+    store.scripts.push(s); store.current = s.id; save(); renderAll();
+    $("title").focus(); $("title").select();
+  });
+  $("importFile").addEventListener("change", (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    const r = new FileReader();
+    r.onload = () => {
+      const s = { id: "s" + Date.now().toString(36), title: f.name.replace(/\.[^.]+$/, ""), body: String(r.result || ""), updated: Date.now() };
+      store.scripts.push(s); store.current = s.id; save(); renderAll();
+    };
+    r.readAsText(f);
+    e.target.value = "";
+  });
+
+  /* Two-tap confirm buttons */
+  const armTimers = new WeakMap();
+  function disarm(btn, label) { clearTimeout(armTimers.get(btn)); armTimers.delete(btn); btn.classList.remove("armed"); btn.textContent = label; }
+  function twoTap(btn, label, fn) {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (!armTimers.has(btn)) {
+        btn.classList.add("armed"); btn.textContent = "Tap again to confirm";
+        armTimers.set(btn, setTimeout(() => disarm(btn, label), 3000));
+        return;
+      }
+      disarm(btn, label);
+      fn();
+    });
+  }
+  twoTap($("delBtn"), "Delete", () => {
+    delete store.logs[store.current];
+    store.scripts = store.scripts.filter((s) => s.id !== store.current);
+    if (!store.scripts.length) store.scripts.push({ id: "s" + Date.now().toString(36), title: "New script", body: "", updated: Date.now() });
+    store.current = store.scripts[0].id; save(); renderAll();
+  });
+
+  /* ---------- Prompter ---------- */
+  const P = $("prompter"), scroller = $("scroller"), copy = $("copy"), hud = $("hud");
+  let y = 0, maxY = 0, v = 0, playing = false, nudge = 0, last = 0, raf = 0;
+  let wordsPerPx = 0, totalWords = 0, cueTops = [], wakeLock = null, countdownT = 0;
+  let beats = [], beatEls = [], bi = 0, rec = null, statusT = 0;
+
+  const lineH = () => S.size * S.lead;
+  const stageH = () => P.clientHeight || window.innerHeight;
+  const eyePx = () => stageH() * (S.eye / 100);
+  const takeMode = () => S.mode === "takes";
+
+  function build() {
+    const s = cur();
+    const blocks = parse(s.body);
+    totalWords = words(s.body || "");
+    copy.classList.toggle("takes", takeMode());
+    if (!takeMode()) {
+      copy.innerHTML = blocks.map((b) => b.type === "cue"
+        ? '<div class="cue">' + esc(b.text) + "</div>"
+        : "<p>" + b.lines.map(inline).join("<br>") + "</p>").join("") + '<div class="end">End of script</div>';
+      beats = []; beatEls = [];
+    } else {
+      beats = beatsOf(blocks, S.split);
+      let n = 0, html = "";
+      const split = S.split;
+      blocks.forEach((b) => {
+        if (b.type === "cue") { html += '<div class="cue">' + esc(b.text) + "</div>"; return; }
+        const groups = split === "line" ? b.lines.map((l) => [l]) : [b.lines];
+        groups.forEach((g) => {
+          n += 1;
+          html += '<div class="beat" data-n="' + n + '"><div class="tag"></div><p>' + g.map(inline).join("<br>") + "</p></div>";
+        });
+      });
+      copy.innerHTML = html + '<div class="end">End of script</div>';
+      beatEls = [...copy.querySelectorAll(".beat")];
+      bi = Math.min(bi, Math.max(0, beats.length - 1));
+      beatEls.forEach((el, i) => renderTag(i));
+    }
+  }
+
+  function applyLayout() {
+    copy.style.fontSize = S.size + "px";
+    copy.style.lineHeight = S.lead;
+    copy.style.width = S.width + "%";
+    $("eyeline").style.top = eyePx() + "px";
+    const sx = S.mirror ? -1 : 1, sy = S.flip ? -1 : 1;
+    $("stage").style.transform = "scale(" + sx + "," + sy + ")";
+    measure();
+    syncControls();
+  }
+  function measure() {
+    const endEl = copy.querySelector(".end");
+    if (takeMode()) {
+      maxY = beatEls.length ? beatEls[beatEls.length - 1].querySelector("p").offsetTop : 0;
+      y = beatTop(bi); nudge = 0;
+    } else {
+      maxY = endEl ? endEl.offsetTop : copy.scrollHeight;
+      y = Math.min(y, maxY);
+    }
+    wordsPerPx = totalWords / Math.max(1, maxY);
+    cueTops = [...copy.querySelectorAll(".cue")].map((el) => el.offsetTop);
+    paint();
+  }
+  const beatTop = (i) => (beatEls[i] ? beatEls[i].querySelector("p").offsetTop : 0);
+  function paint() {
+    const off = eyePx() - lineH() * 0.55;
+    scroller.style.transform = "translate3d(0," + (off - y).toFixed(2) + "px,0)";
+    $("prog").style.width = (maxY ? (y / maxY) * 100 : 0) + "%";
+  }
+
+  /* ---------- Scroll mode ---------- */
+  function readouts() {
+    if (!takeMode()) {
+      $("rSpeed").textContent = Math.round(S.speed);
+      $("rWpm").textContent = Math.round(Math.abs(S.speed) * 60 * wordsPerPx);
+      $("rLeft").textContent = S.speed > 0 ? fmt((maxY - y) / S.speed) : "–";
+      $("playBtn").textContent = playing ? "Pause" : (countdownT ? "Cancel" : "Play");
+    } else {
+      $("rLine").textContent = (beats.length ? bi + 1 : 0) + "/" + beats.length;
+      const lg = logFor(cur().id);
+      const got = new Set(lg.takes.filter((t) => t.mark === "good").map((t) => t.beat)).size;
+      $("rGot").textContent = got;
+      const tb = $("takeBtn");
+      tb.classList.toggle("live", !!rec);
+      tb.textContent = rec ? "■ Stop " + fmt((Date.now() - rec.start) / 1000) : "● Take";
+      P.classList.toggle("recording", !!rec);
+      if (rec && !statusT) setStatus("● REC  L" + rec.beat + "  T" + rec.take + "  " + fmt((Date.now() - rec.start) / 1000), "rec");
+    }
+  }
+
+  function tick(t) {
+    const dt = last ? Math.min(0.05, (t - last) / 1000) : 0;
+    last = t;
+    const target = playing && !takeMode() ? S.speed : 0;
+    v += (target - v) * Math.min(1, dt * 6);
+    if (Math.abs(v) < 0.05 && !playing) v = 0;
+    let moved = v * dt;
+    if (nudge) {
+      const step = nudge * Math.min(1, dt * 14);
+      moved += step; nudge -= step;
+      if (Math.abs(nudge) < 0.3) { moved += nudge; nudge = 0; }
+    }
+    if (moved) {
+      y = Math.max(0, Math.min(maxY, y + moved));
+      if (y >= maxY && playing) setPlaying(false);
+      paint();
+    }
+    readouts();
+    raf = requestAnimationFrame(tick);
+  }
+
+  function setPlaying(on) {
+    playing = on;
+    if (on) scheduleHide(); else showHud(true);
+    readouts();
+  }
+  function togglePlay() {
+    if (countdownT) { cancelCountdown(); return; }
+    if (playing) { setPlaying(false); return; }
+    if (y >= maxY - 1) y = 0;
+    if (S.count && y < 1) runCountdown(); else setPlaying(true);
+  }
+  function runCountdown() {
+    let n = 3;
+    const el = $("countdown");
+    el.hidden = false; el.textContent = n;
+    countdownT = setInterval(() => {
+      n -= 1;
+      if (n <= 0) { cancelCountdown(); setPlaying(true); }
+      else el.textContent = n;
+    }, 800);
+    readouts();
+  }
+  function cancelCountdown() { clearInterval(countdownT); countdownT = 0; $("countdown").hidden = true; }
+
+  const clampSpeed = (s) => Math.max(5, Math.min(600, s));
+  function speed(delta) { S.speed = clampSpeed(S.speed + delta); save(); readouts(); }
+  const speedStep = () => (S.speed < 60 ? 4 : S.speed < 160 ? 6 : 10);
+
+  function jumpCue(dir) {
+    if (takeMode()) {
+      const secOf = (i) => beats[i] && beats[i].section;
+      let i = bi;
+      if (dir > 0) { while (i < beats.length - 1 && secOf(i) === secOf(bi)) i++; }
+      else {
+        const startOfMine = (() => { let k = bi; while (k > 0 && secOf(k - 1) === secOf(bi)) k--; return k; })();
+        if (bi > startOfMine) i = startOfMine;
+        else { i = Math.max(0, startOfMine - 1); while (i > 0 && secOf(i - 1) === secOf(startOfMine - 1)) i--; }
+      }
+      goBeat(i);
+      return;
+    }
+    const here = y + 2;
+    let target = null;
+    if (dir > 0) target = cueTops.find((t) => t > here);
+    else { const prev = cueTops.filter((t) => t < here - 4); target = prev.length ? prev[prev.length - 1] : 0; }
+    if (target == null) return;
+    nudge = target - y;
+  }
+
+  /* ---------- Take mode ---------- */
+  function setStatus(text, kind, ms) {
+    const el = $("status");
+    el.hidden = !takeMode();
+    el.className = "status" + (kind ? " " + kind : "");
+    el.textContent = text;
+    clearTimeout(statusT); statusT = 0;
+    if (ms) statusT = setTimeout(() => { statusT = 0; idleStatus(); }, ms);
+  }
+  function idleStatus() {
+    if (!takeMode()) { $("status").hidden = true; return; }
+    if (rec) return;
+    const b = beats[bi];
+    if (!b) { setStatus("NO LINES IN THIS SCRIPT", ""); return; }
+    const takes = takesFor(b.n);
+    const goods = takes.filter((t) => t.mark === "good").length;
+    setStatus("L" + b.n + "  ·  NEXT T" + (takes.length + 1) + (goods ? "  ·  GOT IT" : ""), goods ? "" : "");
+  }
+  const takesFor = (n) => logFor(cur().id).takes.filter((t) => t.beat === n);
+  function renderTag(i) {
+    const el = beatEls[i];
+    if (!el) return;
+    const b = beats[i];
+    const ts = takesFor(b.n);
+    const g = ts.filter((t) => t.mark === "good").length;
+    const x = ts.filter((t) => t.mark === "ng").length;
+    el.querySelector(".tag").innerHTML =
+      "<span>L" + b.n + "</span>" +
+      (ts.length ? "<span>" + ts.length + (ts.length === 1 ? " take" : " takes") + "</span>" : "") +
+      (g ? '<span class="g">✓ ' + (g > 1 ? g + " good" : "got it") + "</span>" : "") +
+      (x ? '<span class="x">✕ ' + x + "</span>" : "");
+    el.classList.toggle("cur", i === bi);
+  }
+  function goBeat(i) {
+    if (!beats.length) return;
+    if (rec) stopTake();
+    const prev = bi;
+    bi = Math.max(0, Math.min(beats.length - 1, i));
+    renderTag(prev); renderTag(bi);
+    nudge = beatTop(bi) - y;
+    idleStatus();
+  }
+  function startTake() {
+    const b = beats[bi];
+    if (!b) return;
+    const lg = logFor(cur().id);
+    const take = takesFor(b.n).length + 1;
+    const entry = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5), beat: b.n, take, section: b.section, text: b.text, start: Date.now(), end: null, mark: null };
+    lg.takes.push(entry);
+    rec = entry;
+    save(); renderTag(bi); scheduleHide();
+  }
+  function stopTake() {
+    if (!rec) return;
+    rec.end = Date.now();
+    const i = beats.findIndex((b) => b.n === rec.beat);
+    rec = null;
+    save(); renderTag(i); idleStatus(); showHud(true);
+  }
+  function toggleTake() { rec ? stopTake() : startTake(); }
+  function markTake(mark) {
+    const b = beats[bi];
+    if (!b) return;
+    if (rec) stopTake();
+    const ts = takesFor(b.n);
+    const t = ts[ts.length - 1];
+    if (!t) { setStatus("NO TAKE ON L" + b.n + " YET", "note", 1600); return; }
+    t.mark = t.mark === mark ? null : mark;
+    save(); renderTag(bi);
+    if (t.mark === "good") {
+      setStatus("✓ L" + b.n + " T" + t.take + " GOOD", "good", 1200);
+      if (S.advance && bi < beats.length - 1) setTimeout(() => goBeat(bi + 1), 450);
+    } else if (t.mark === "ng") setStatus("✕ L" + b.n + " T" + t.take + " SCRATCH", "rec", 1200);
+    else setStatus("L" + b.n + " T" + t.take + " UNMARKED", "note", 1200);
+    if (!$("logSheet").hidden) renderLog();
+  }
+  function slate() {
+    const lg = logFor(cur().id);
+    const n = lg.slates.length + 1;
+    lg.slates.push({ n, t: Date.now() });
+    save();
+    const el = $("slate");
+    el.textContent = "SLATE " + n;
+    el.hidden = false;
+    setTimeout(() => { el.hidden = true; }, 400);
+    if (!$("logSheet").hidden) renderLog();
+  }
+
+  /* ---------- Take log + export ---------- */
+  const FPS_BASE = (fps) => Math.round(parseFloat(fps));
+  function tcFromFrames(frames, base) {
+    frames = Math.max(0, Math.round(frames));
+    const f = frames % base, s = Math.floor(frames / base);
+    return [Math.floor(s / 3600), Math.floor(s / 60) % 60, s % 60, f].map((n) => String(n).padStart(2, "0")).join(":");
+  }
+  function zeroOptions() {
+    const lg = logFor(cur().id);
+    const opts = [];
+    lg.slates.forEach((s) => opts.push({ v: "slate:" + s.n, label: "Slate " + s.n + " at " + clock(s.t) }));
+    opts.push({ v: "tod", label: "Time of day timecode" });
+    return opts;
+  }
+  function resolveZero() {
+    const lg = logFor(cur().id);
+    let z = S.zero;
+    if (z === "auto" || (z.startsWith("slate:") && !lg.slates.some((s) => "slate:" + s.n === z))) {
+      z = lg.slates.length ? "slate:" + lg.slates[lg.slates.length - 1].n : "tod";
+    }
+    return z;
+  }
+  /* Returns {in, out} timecodes (or null when the take falls before the chosen slate). */
+  function takeTC(t) {
+    const fps = parseFloat(S.fps), base = FPS_BASE(S.fps);
+    const z = resolveZero();
+    const end = t.end || t.start + 1000;
+    if (z === "tod") {
+      const tod = (ms) => {
+        const d = new Date(ms);
+        const sec = d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds();
+        return sec * base + Math.floor((d.getMilliseconds() / 1000) * base);
+      };
+      return { inF: tod(t.start), outF: tod(end), base };
+    }
+    const sl = logFor(cur().id).slates.find((s) => "slate:" + s.n === z);
+    const rel = (t.start - sl.t) / 1000;
+    if (rel < 0) return null;
+    const origin = 3600 * base; // timeline start 01:00:00:00
+    return { inF: origin + Math.round(rel * fps), outF: origin + Math.round(((end - sl.t) / 1000) * fps), base };
+  }
+  function renderLog() {
+    const lg = logFor(cur().id);
+    const got = new Set(lg.takes.filter((t) => t.mark === "good").map((t) => t.beat)).size;
+    const total = beats.length || beatsOf(parse(cur().body), S.split).length;
+    $("logSum").innerHTML = "<b>" + lg.takes.length + "</b> takes · <b>" + got + "</b>/" + total + " lines got · <b>" + lg.slates.length + "</b> slates";
+    if (!lg.takes.length) {
+      $("logWrap").innerHTML = '<div class="empty">No takes yet. Press the knob (or ● Take) to start one.</div>';
+    } else {
+      const rows = [...lg.takes].reverse().map((t) => {
+        const dur = t.end ? fmt((t.end - t.start) / 1000) : "rec";
+        const mk = t.mark === "good" ? "✓ good" : t.mark === "ng" ? "✕ scratch" : "mark";
+        return '<tr><td>' + clock(t.start) + "</td><td>L" + t.beat + "</td><td>T" + t.take + "</td><td>" + dur +
+          '</td><td><button type="button" class="mk ' + (t.mark || "") + '" data-id="' + t.id + '">' + mk + '</button></td><td class="txt"></td></tr>';
+      }).join("");
+      $("logWrap").innerHTML = '<table class="log"><thead><tr><th>Time</th><th>Line</th><th>Take</th><th>Len</th><th>Mark</th><th>Text</th></tr></thead><tbody>' + rows + "</tbody></table>";
+      const tds = $("logWrap").querySelectorAll("td.txt");
+      [...lg.takes].reverse().forEach((t, i) => { tds[i].textContent = t.text.length > 80 ? t.text.slice(0, 80) + "…" : t.text; });
+    }
+    const sel = $("zeroSel");
+    const z = resolveZero();
+    sel.innerHTML = zeroOptions().map((o) => '<option value="' + o.v + '"' + (o.v === z ? " selected" : "") + ">" + esc(o.label) + "</option>").join("");
+    $("fpsSel").value = S.fps;
+    $("zeroHint").textContent = z === "tod"
+      ? "Markers use the time of day. Works when your camera records time-of-day timecode and its clock matches this device."
+      : "Put the clip on a timeline starting at 01:00:00:00 with the slate's white frame as the first frame, then import. Takes before this slate are left out.";
+  }
+  $("logWrap").addEventListener("click", (e) => {
+    const b = e.target.closest(".mk");
+    if (!b) return;
+    const t = logFor(cur().id).takes.find((x) => x.id === b.dataset.id);
+    if (!t) return;
+    t.mark = t.mark === null ? "good" : t.mark === "good" ? "ng" : null;
+    save(); renderLog();
+    const i = beats.findIndex((x) => x.n === t.beat); renderTag(i);
+  });
+  $("zeroSel").addEventListener("change", (e) => { S.zero = e.target.value; save(); renderLog(); });
+  $("fpsSel").addEventListener("change", (e) => { S.fps = e.target.value; save(); });
+
+  const safeName = (s) => (s || "script").replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-").slice(0, 40) || "script";
+  function buildEdl() {
+    const s = cur(), lg = logFor(s.id);
+    let n = 0, out = "TITLE: Cueline " + safeName(s.title) + "\nFCM: NON-DROP FRAME\n\n";
+    lg.takes.forEach((t) => {
+      const tc = takeTC(t);
+      if (!tc) return;
+      n += 1;
+      const a = tcFromFrames(tc.inF, tc.base), b = tcFromFrames(tc.inF + 1, tc.base);
+      const color = t.mark === "good" ? "ResolveColorGreen" : t.mark === "ng" ? "ResolveColorRed" : "ResolveColorBlue";
+      const label = ("L" + t.beat + " T" + t.take + (t.mark === "good" ? " GOOD" : t.mark === "ng" ? " NG" : "") + " - " + t.text).replace(/\|/g, "/").slice(0, 90);
+      const dur = Math.max(1, tc.outF - tc.inF);
+      out += String(n).padStart(3, "0") + "  001      V     C        " + a + " " + b + " " + a + " " + b + "  \n";
+      out += " |C:" + color + " |M:" + label + " |D:" + dur + "\n\n";
+    });
+    return { text: out, count: n };
+  }
+  function buildCsv() {
+    const s = cur(), lg = logFor(s.id);
+    const q = (v) => '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"';
+    const rows = [["script", "line", "section", "take", "mark", "start_clock", "end_clock", "duration_s", "tc_in", "tc_out", "text"]];
+    lg.takes.forEach((t) => {
+      const tc = takeTC(t);
+      rows.push([s.title, t.beat, t.section, t.take, t.mark || "", clock(t.start), t.end ? clock(t.end) : "",
+        t.end ? ((t.end - t.start) / 1000).toFixed(1) : "", tc ? tcFromFrames(tc.inF, tc.base) : "", tc ? tcFromFrames(tc.outF, tc.base) : "", t.text]);
+    });
+    return rows.map((r) => r.map(q).join(",")).join("\n") + "\n";
+  }
+  const fail = (code) => { const e = new Error(code); e.code = code; return e; };
+  let downloads = {
+    async save({ filename, data }) {
+      const type = filename.endsWith(".csv") ? "text/csv" : "text/plain";
+      const file = new File([data], filename, { type });
+      const touch = navigator.maxTouchPoints > 1;
+      if (touch && navigator.canShare && navigator.canShare({ files: [file] })) {
+        try { await navigator.share({ files: [file], title: filename }); return { status: "saved" }; }
+        catch (err) { if (err && err.name === "AbortError") throw fail("declined"); }
+      }
+      try {
+        const url = URL.createObjectURL(file);
+        const a = document.createElement("a");
+        a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 4000);
+        return { status: "saved" };
+      } catch (err) { throw fail("unavailable"); }
+    }
+  };
+  function syncExport() {
+    $("saveEdl").hidden = !downloads;
+    $("saveCsv").hidden = !downloads;
+  }
+  syncExport();
+  function exportMsg(t) { $("exportMsg").textContent = t; }
+  async function saveFile(name, data, okMsg) {
+    if (!downloads) return;
+    try { await downloads.save({ filename: name, data }); exportMsg(okMsg); }
+    catch (err) {
+      const c = err && err.code;
+      if (c === "declined") exportMsg("Save cancelled.");
+      else if (c === "rate_limited") exportMsg("A save prompt is already open. Try again in a moment.");
+      else { exportMsg("Saving isn't available here. Use Copy instead."); downloads = null; syncExport(); }
+    }
+  }
+  function copyText(text, okMsg) {
+    const box = $("exportBox");
+    const fallback = () => { box.hidden = false; box.value = text; box.focus(); box.select(); exportMsg("Copy didn't go through. The text is selected below, copy it from there."); };
+    try {
+      navigator.clipboard.writeText(text).then(() => { box.hidden = true; exportMsg(okMsg); }, fallback);
+    } catch (e) { fallback(); }
+  }
+  const stamp = () => { const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
+  $("saveEdl").addEventListener("click", () => {
+    const e = buildEdl();
+    if (!e.count) { exportMsg("No takes to export at this zero point."); return; }
+    saveFile("cueline-" + safeName(cur().title) + "-" + stamp() + "-markers.txt", e.text, "Saved " + e.count + " markers. Rename the file to .edl before importing.");
+  });
+  $("saveCsv").addEventListener("click", () => {
+    if (!logFor(cur().id).takes.length) { exportMsg("No takes to export yet."); return; }
+    saveFile("cueline-" + safeName(cur().title) + "-" + stamp() + "-takes.csv", buildCsv(), "Saved the take log.");
+  });
+  $("copyEdl").addEventListener("click", () => {
+    const e = buildEdl();
+    if (!e.count) { exportMsg("No takes to export at this zero point."); return; }
+    copyText(e.text, "Copied " + e.count + " markers. Paste into a text file named something.edl.");
+  });
+  $("copyCsv").addEventListener("click", () => {
+    if (!logFor(cur().id).takes.length) { exportMsg("No takes to export yet."); return; }
+    copyText(buildCsv(), "Copied the take log as CSV.");
+  });
+  twoTap($("clearLog"), "Clear log", () => {
+    rec = null;
+    store.logs[cur().id] = { takes: [], slates: [] };
+    S.zero = "auto";
+    save(); renderLog(); beatEls.forEach((el, i) => renderTag(i)); idleStatus();
+  });
+
+  /* ---------- HUD ---------- */
+  let hideT = 0;
+  function showHud(stay) {
+    hud.classList.remove("away"); P.classList.remove("hide-cursor");
+    clearTimeout(hideT);
+    if (!stay && (playing || rec)) scheduleHide();
+  }
+  function scheduleHide() {
+    clearTimeout(hideT);
+    hideT = setTimeout(() => {
+      if ((playing || rec) && $("sheet").hidden && $("logSheet").hidden) { hud.classList.add("away"); P.classList.add("hide-cursor"); }
+    }, 2500);
+  }
+  function closeSheets() {
+    $("sheet").hidden = true; $("logSheet").hidden = true;
+    $("setBtn").classList.remove("on"); $("logBtn").classList.remove("on");
+  }
+
+  /* ---------- Keys ---------- */
+  const keyLabel = (e) => (e.key === " " ? "Space" : e.key) + (e.code && e.code !== e.key ? "  (" + e.code + ")" : "");
+  let press = null;
+  function onKeyDown(e) {
+    if (P.hidden) return;
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.target && e.target.tagName === "SELECT") return;
+    const dot = $("keydot");
+    dot.classList.add("hit"); setTimeout(() => dot.classList.remove("hit"), 60);
+    $("keytest").innerHTML = "Last key: <b></b>";
+    $("keytest").querySelector("b").textContent = keyLabel(e);
+    let handled = true;
+    const k = e.key;
+    if (takeMode()) {
+      switch (k) {
+        case " ": case "Enter":
+          if (!e.repeat && !press) {
+            press = { key: k, long: false, t: setTimeout(() => { if (press) { press.long = true; markTake("good"); } }, 550) };
+          }
+          break;
+        case "ArrowRight": case "ArrowDown": goBeat(bi + 1); break;
+        case "ArrowLeft": case "ArrowUp": goBeat(bi - 1); break;
+        case "g": case "G": markTake("good"); break;
+        case "x": case "X": markTake("ng"); break;
+        case "s": case "S": slate(); break;
+        case "l": case "L": toggleLog(); break;
+        case "PageDown": jumpCue(1); break;
+        case "PageUp": jumpCue(-1); break;
+        case "Home": case "r": case "R": goBeat(0); break;
+        case "End": goBeat(beats.length - 1); break;
+        case "m": case "M": S.mirror = !S.mirror; save(); applyLayout(); break;
+        case "Escape": closePrompter(); break;
+        default: handled = false;
+      }
+    } else {
+      switch (k) {
+        case "ArrowRight": playing ? speed(speedStep()) : (nudge += lineH() * 0.5); break;
+        case "ArrowLeft": playing ? speed(-speedStep()) : (nudge -= lineH() * 0.5); break;
+        case "ArrowDown": nudge += lineH(); break;
+        case "ArrowUp": nudge -= lineH(); break;
+        case " ": case "Enter": case "k": case "K": if (!e.repeat) togglePlay(); break;
+        case "PageDown": jumpCue(1); break;
+        case "PageUp": jumpCue(-1); break;
+        case "Home": case "r": case "R": nudge = -y; break;
+        case "End": nudge = maxY - y; break;
+        case "=": case "+": speed(speedStep()); break;
+        case "-": case "_": speed(-speedStep()); break;
+        case "m": case "M": S.mirror = !S.mirror; save(); applyLayout(); break;
+        case "Escape": closePrompter(); break;
+        default: handled = false;
+      }
+    }
+    if (handled) e.preventDefault();
+  }
+  function onKeyUp(e) {
+    if (!press || e.key !== press.key) return;
+    clearTimeout(press.t);
+    const wasLong = press.long;
+    press = null;
+    e.preventDefault();
+    if (!wasLong && takeMode() && !P.hidden) toggleTake();
+  }
+  document.addEventListener("keydown", onKeyDown);
+  document.addEventListener("keyup", onKeyUp);
+  window.addEventListener("blur", () => { if (press) { clearTimeout(press.t); press = null; } });
+
+  /* ---------- Wheel and touch ---------- */
+  let wheelAcc = 0, wheelT = 0;
+  P.addEventListener("wheel", (e) => {
+    if (e.target.closest(".sheet")) return;
+    e.preventDefault();
+    const unit = e.deltaMode === 1 ? lineH() : 1;
+    const d = e.deltaY * unit * (S.flip ? -1 : 1);
+    if (takeMode()) {
+      wheelAcc += d;
+      if (Math.abs(wheelAcc) > 60 && Date.now() - wheelT > 180) { goBeat(bi + Math.sign(wheelAcc)); wheelAcc = 0; wheelT = Date.now(); }
+    } else nudge += d;
+  }, { passive: false });
+
+  let drag = null;
+  P.addEventListener("pointerdown", (e) => {
+    if (e.target.closest(".hud, .sheet")) return;
+    drag = { last: e.clientY, total: 0, moved: 0 };
+    try { P.setPointerCapture(e.pointerId); } catch (err) {}
+  });
+  P.addEventListener("pointermove", (e) => {
+    if (!drag) { if (e.pointerType === "mouse") showHud(); return; }
+    const dy = (e.clientY - drag.last) * (S.flip ? -1 : 1);
+    drag.last = e.clientY; drag.moved += Math.abs(dy); drag.total += dy;
+    if (!takeMode()) { y = Math.max(0, Math.min(maxY, y - dy)); paint(); }
+  });
+  P.addEventListener("pointerup", () => {
+    if (!drag) return;
+    const tap = drag.moved < 8;
+    const total = drag.total;
+    drag = null;
+    P.focus({ preventScroll: true });
+    if (!tap && takeMode() && Math.abs(total) > 40) { goBeat(bi + (total < 0 ? 1 : -1)); return; }
+    if (tap) {
+      if (!$("sheet").hidden || !$("logSheet").hidden) { closeSheets(); return; }
+      if (hud.classList.contains("away")) showHud(); else if (playing || rec) { hud.classList.add("away"); }
+    }
+  });
+
+  /* ---------- Buttons ---------- */
+  const hb = (id, fn) => $(id).addEventListener("click", (e) => { e.stopPropagation(); fn(); P.focus({ preventScroll: true }); showHud(true); });
+  hb("playBtn", togglePlay);
+  hb("slower", () => speed(-speedStep()));
+  hb("faster", () => speed(speedStep()));
+  hb("restartBtn", () => { takeMode() ? goBeat(0) : (nudge = -y); });
+  hb("exitBtn", closePrompter);
+  hb("prevBeat", () => goBeat(bi - 1));
+  hb("nextBeat", () => goBeat(bi + 1));
+  hb("takeBtn", toggleTake);
+  hb("goodBtn", () => markTake("good"));
+  hb("ngBtn", () => markTake("ng"));
+  hb("slateBtn", slate);
+  hb("logBtn", toggleLog);
+  hb("setBtn", () => {
+    const open = $("sheet").hidden;
+    closeSheets();
+    $("sheet").hidden = !open; $("setBtn").classList.toggle("on", open);
+  });
+  function toggleLog() {
+    const open = $("logSheet").hidden;
+    closeSheets();
+    if (open) { renderLog(); $("logSheet").hidden = false; $("logBtn").classList.add("on"); $("exportBox").hidden = true; showHud(true); }
+  }
+  function setMode(m) {
+    if (S.mode === m) return;
+    if (rec) stopTake();
+    playing = false; cancelCountdown(); v = 0; nudge = 0;
+    S.mode = m; save();
+    if (m === "takes") {
+      // start on the line nearest the current scroll position
+      bi = 0;
+    } else y = 0;
+    closeSheets();
+    build(); applyLayout(); idleStatus();
+    if (m !== "takes") $("status").hidden = true;
+  }
+  hb("mScroll", () => setMode("scroll"));
+  hb("mTakes", () => setMode("takes"));
+
+  /* Settings sheet */
+  function bindRange(id, outId, key, fmtFn) {
+    const el = $(id);
+    el.addEventListener("input", () => {
+      const keepFrac = maxY ? y / maxY : 0;
+      S[key] = parseFloat(el.value); save();
+      applyLayout();
+      if (!takeMode()) { y = keepFrac * maxY; paint(); }
+      $(outId).textContent = fmtFn(S[key]);
+    });
+  }
+  bindRange("sSize", "oSize", "size", (x) => x + "px");
+  bindRange("sWidth", "oWidth", "width", (x) => x + "%");
+  bindRange("sLead", "oLead", "lead", (x) => x.toFixed(2));
+  bindRange("sEye", "oEye", "eye", (x) => x + "%");
+  function syncControls() {
+    $("sSize").value = S.size; $("oSize").textContent = S.size + "px";
+    $("sWidth").value = S.width; $("oWidth").textContent = S.width + "%";
+    $("sLead").value = S.lead; $("oLead").textContent = Number(S.lead).toFixed(2);
+    $("sEye").value = S.eye; $("oEye").textContent = S.eye + "%";
+    $("tMirror").classList.toggle("on", S.mirror);
+    $("tFlip").classList.toggle("on", S.flip);
+    $("tCount").classList.toggle("on", S.count);
+    $("tAdvance").classList.toggle("on", S.advance);
+    $("tSplit").textContent = "Split: " + (S.split === "line" ? "each line" : "paragraphs");
+    $("mScroll").classList.toggle("on", !takeMode());
+    $("mTakes").classList.toggle("on", takeMode());
+    $("gScroll").hidden = takeMode();
+    $("gTakes").hidden = !takeMode();
+  }
+  const tog = (id, key) => $(id).addEventListener("click", (e) => { e.stopPropagation(); S[key] = !S[key]; save(); applyLayout(); P.focus({ preventScroll: true }); });
+  tog("tMirror", "mirror"); tog("tFlip", "flip"); tog("tCount", "count"); tog("tAdvance", "advance");
+  $("tSplit").addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (rec) stopTake();
+    S.split = S.split === "line" ? "para" : "line"; save();
+    bi = 0; build(); applyLayout(); idleStatus();
+    P.focus({ preventScroll: true });
+  });
+
+  const root = document.documentElement;
+  const fsReq = root.requestFullscreen || root.webkitRequestFullscreen;
+  const standalone = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+  if (!fsReq || standalone) $("tFull").hidden = true;
+  $("tFull").addEventListener("click", (e) => {
+    e.stopPropagation();
+    try {
+      const inFs = document.fullscreenElement || document.webkitFullscreenElement;
+      if (inFs) (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+      else { const p = fsReq.call(root); if (p && p.catch) p.catch(() => {}); }
+    } catch (err) {}
+    P.focus({ preventScroll: true });
+  });
+
+  async function grabWake() {
+    try { if ("wakeLock" in navigator) wakeLock = await navigator.wakeLock.request("screen"); } catch (e) { wakeLock = null; }
+  }
+  document.addEventListener("visibilitychange", () => { if (!P.hidden && document.visibilityState === "visible") grabWake(); });
+
+  function openPrompter() {
+    if (document.activeElement) document.activeElement.blur();
+    P.hidden = false;
+    document.body.style.overflow = "hidden";
+    y = 0; v = 0; nudge = 0; playing = false; bi = 0; rec = null;
+    closeSheets();
+    build();
+    applyLayout();
+    idleStatus();
+    requestAnimationFrame(measure);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if (!P.hidden) measure(); });
+    P.focus({ preventScroll: true });
+    showHud(true);
+    grabWake();
+    last = 0; cancelAnimationFrame(raf); raf = requestAnimationFrame(tick);
+  }
+  function closePrompter() {
+    cancelCountdown();
+    if (rec) stopTake();
+    playing = false;
+    cancelAnimationFrame(raf);
+    P.hidden = true; closeSheets(); $("status").hidden = true;
+    document.body.style.overflow = "";
+    try { wakeLock && wakeLock.release(); } catch (e) {}
+    wakeLock = null;
+    try {
+      if (document.fullscreenElement || document.webkitFullscreenElement) (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+    } catch (e) {}
+    renderList();
+  }
+  $("promptBtn").addEventListener("click", openPrompter);
+  window.addEventListener("resize", () => { if (!P.hidden) applyLayout(); });
+
+  try {
+    const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    let dismissed = false;
+    try { dismissed = localStorage.getItem("cueline.installHint") === "off"; } catch (e) {}
+    if (ios && !standalone && !dismissed) $("installHint").hidden = false;
+    $("installClose").addEventListener("click", () => {
+      $("installHint").hidden = true;
+      try { localStorage.setItem("cueline.installHint", "off"); } catch (e) {}
+    });
+  } catch (e) {}
+
+  renderAll();
+})();
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => { navigator.serviceWorker.register("sw.js").catch(() => {}); });
+}
+</script>
+
+</body>
+</html>
