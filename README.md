@@ -34,5 +34,6 @@ Some browsers refuse to send files straight to AssemblyAI. In that case deploy [
 | G / X | | Mark good / scratch |
 | Page Down / Up | Next / previous section | Next / previous section |
 | [ / ] | Text smaller / larger | Text smaller / larger |
+| F | Full screen script (tap for the exit button) | Full screen script |
 | M | Mirror | Mirror |
 | S / L | | Slate / take log |

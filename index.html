@@ -163,6 +163,16 @@ kbd {
   overflow: hidden; touch-action: none; outline: none; cursor: default;
 }
 .prompter.hide-cursor { cursor: none; }
+.prompter.focus .hud, .prompter.focus .status, .prompter.focus .sheet, .prompter.focus .copy .tag { display: none !important; }
+.prompter.focus { cursor: none; }
+.prompter.focus.peek { cursor: default; }
+.focusexit {
+  position: absolute; z-index: 7; display: none; align-items: center; gap: 8px;
+  top: calc(env(safe-area-inset-top, 0px) + 14px); right: max(14px, env(safe-area-inset-right, 0px));
+  height: 44px; padding: 0 18px; border-radius: 999px;
+  border: 1px solid var(--hud-line); background: var(--hud); color: var(--hud-fg); font-size: 0.95rem;
+}
+.prompter.focus.peek .focusexit { display: inline-flex; }
 .stage { position: absolute; inset: 0; }
 .scroller { position: absolute; left: 0; right: 0; top: 0; will-change: transform; }
 .copy {
@@ -397,6 +407,7 @@ kbd {
         <tr><td><kbd>PgDn</kbd> <kbd>PgUp</kbd></td><td>Next / previous section.</td></tr>
         <tr><td><kbd>Home</kbd> <kbd>R</kbd></td><td>Back to the top.</td></tr>
         <tr><td><kbd>[</kbd> <kbd>]</kbd></td><td>Text smaller / larger.</td></tr>
+        <tr><td><kbd>F</kbd></td><td>Full screen script. Tap the screen for the exit button.</td></tr>
         <tr><td><kbd>M</kbd> <kbd>Esc</kbd></td><td>Mirror / leave.</td></tr>
       </table>
     </div>
@@ -410,6 +421,7 @@ kbd {
         <tr><td><kbd>X</kbd></td><td>Mark the take scratch.</td></tr>
         <tr><td><kbd>S</kbd></td><td>Slate: white flash plus a sync point in the log.</td></tr>
         <tr><td><kbd>L</kbd></td><td>Open the take log.</td></tr>
+        <tr><td><kbd>F</kbd></td><td>Full screen script, nothing else on screen.</td></tr>
         <tr data-app><td>Record session</td><td>Records audio for the wrap-up package: transcript, script check, selects.</td></tr>
       </table>
     </div>
@@ -463,6 +475,8 @@ kbd {
     <div class="slate" id="slate" hidden></div>
   </div>
 
+  <button class="focusexit" id="focusExit" type="button">Exit full screen</button>
+
   <div class="sheet" id="sheet" hidden>
     <h3>Display</h3>
     <div class="row"><label for="sSize">Text size</label><input id="sSize" type="range" min="28" max="140" step="2"><output id="oSize"></output></div>
@@ -473,7 +487,6 @@ kbd {
       <button class="hb" id="tMirror" type="button">Mirror ↔</button>
       <button class="hb" id="tFlip" type="button">Flip ↕</button>
       <button class="hb" id="tCount" type="button">3-2-1 start</button>
-      <button class="hb" id="tFull" type="button">Full screen</button>
     </div>
     <h3>Take mode</h3>
     <div class="toggles">
@@ -593,6 +606,7 @@ kbd {
       <button class="hb" id="textBigger" type="button" aria-label="Larger text"><span style="font-size:1.2em">A+</span></button>
     </div>
     <button class="hb" id="mirrorBtn" type="button" aria-pressed="false">Mirror</button>
+    <button class="hb" id="focusBtn" type="button" aria-label="Full screen script" title="Full screen script (F)"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
     <button class="hb" id="restartBtn" type="button" aria-label="Back to top"><svg viewBox="0 0 24 24"><path d="M4 4v6h6"/><path d="M4.5 10A8 8 0 1 1 6 16.5"/></svg></button>
     <button class="hb" id="setBtn" type="button" aria-label="Display settings"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></button>
     <button class="hb" id="exitBtn" type="button">Done</button>
@@ -770,7 +784,7 @@ kbd {
 
   /* ---------- Prompter ---------- */
   const P = $("prompter"), scroller = $("scroller"), copy = $("copy"), hud = $("hud");
-  let y = 0, maxY = 0, v = 0, playing = false, nudge = 0, last = 0, raf = 0;
+  let y = 0, maxY = 0, v = 0, playing = false, nudge = 0, nudgeV = 0, last = 0, raf = 0;
   let wordsPerPx = 0, totalWords = 0, cueTops = [], wakeLock = null, countdownT = 0;
   let beats = [], beatEls = [], bi = 0, rec = null, statusT = 0;
 
@@ -822,7 +836,7 @@ kbd {
     const endEl = copy.querySelector(".end");
     if (takeMode()) {
       maxY = beatEls.length ? beatEls[beatEls.length - 1].querySelector("p").offsetTop : 0;
-      y = beatTop(bi); nudge = 0;
+      y = beatTop(bi); nudge = 0; nudgeV = 0;
     } else {
       maxY = endEl ? endEl.offsetTop : copy.scrollHeight;
       y = Math.min(y, maxY);
@@ -866,11 +880,25 @@ kbd {
     const target = playing && !takeMode() ? S.speed : 0;
     v += (target - v) * Math.min(1, dt * 6);
     if (Math.abs(v) < 0.05 && !playing) v = 0;
-    let moved = v * dt;
-    if (nudge) {
-      const step = nudge * Math.min(1, dt * 14);
-      moved += step; nudge -= step;
-      if (Math.abs(nudge) < 0.3) { moved += nudge; nudge = 0; }
+    // held arrow keys glide: slow at first, faster the longer they're held, easing out on release
+    let holdTarget = 0;
+    if (hold) {
+      const held = (performance.now() - hold.t0) / 1000;
+      if (held >= HOLD_DELAY) holdTarget = hold.dir * lineH() * (1.5 + 4.5 * Math.min(1, (held - HOLD_DELAY) / 1.2));
+    }
+    holdV += (holdTarget - holdV) * Math.min(1, dt * (holdTarget ? 6 : 9));
+    if (Math.abs(holdV) < 0.5 && !holdTarget) holdV = 0;
+    let moved = v * dt + holdV * dt;
+    // steps (knob clicks, taps, line jumps) ease in and out instead of starting at full speed
+    // critically damped spring: no start kick, no overshoot; ~0.25 s per step
+    if (nudge || nudgeV) {
+      const W = 20, SUB = 4, h = dt / SUB;
+      for (let k = 0; k < SUB; k++) {
+        nudgeV += (W * W * nudge - 2 * W * nudgeV) * h;
+        const step = nudgeV * h;
+        moved += step; nudge -= step;
+      }
+      if (Math.abs(nudge) < 0.3 && Math.abs(nudgeV) < 6) { moved += nudge; nudge = 0; nudgeV = 0; }
     }
     if (moved) {
       y = Math.max(0, Math.min(maxY, y + moved));
@@ -1929,15 +1957,16 @@ kbd {
         case "m": case "M": toggleMirror(); break;
         case "[": textSize(-4); break;
         case "]": textSize(4); break;
-        case "Escape": closePrompter(); break;
+        case "f": case "F": setFocus(!inFocus()); break;
+        case "Escape": inFocus() ? setFocus(false) : closePrompter(); break;
         default: handled = false;
       }
     } else {
       switch (k) {
-        case "ArrowRight": playing ? speed(speedStep()) : (nudge += lineH() * 0.5); break;
-        case "ArrowLeft": playing ? speed(-speedStep()) : (nudge -= lineH() * 0.5); break;
-        case "ArrowDown": nudge += lineH(); break;
-        case "ArrowUp": nudge -= lineH(); break;
+        case "ArrowRight": playing ? speed(speedStep()) : startHold(e, 1, 0.5); break;
+        case "ArrowLeft": playing ? speed(-speedStep()) : startHold(e, -1, 0.5); break;
+        case "ArrowDown": startHold(e, 1, 1); break;
+        case "ArrowUp": startHold(e, -1, 1); break;
         case " ": case "Enter": case "k": case "K": if (!e.repeat) togglePlay(); break;
         case "PageDown": jumpCue(1); break;
         case "PageUp": jumpCue(-1); break;
@@ -1948,13 +1977,28 @@ kbd {
         case "m": case "M": toggleMirror(); break;
         case "[": textSize(-4); break;
         case "]": textSize(4); break;
-        case "Escape": closePrompter(); break;
+        case "f": case "F": setFocus(!inFocus()); break;
+        case "Escape": inFocus() ? setFocus(false) : closePrompter(); break;
         default: handled = false;
       }
     }
     if (handled) e.preventDefault();
   }
+  /* Arrow keys while paused: a tap (or one knob click) moves a short smooth step; holding glides. */
+  const HOLD_DELAY = 0.18;
+  let hold = null, holdV = 0;
+  function startHold(e, dir, unit) {
+    if (e.repeat || (hold && hold.key === e.key)) return;
+    hold = { key: e.key, dir, unit, t0: performance.now() };
+  }
+  function endHold(e) {
+    if (!hold || (e && e.key !== hold.key)) return false;
+    if ((performance.now() - hold.t0) / 1000 < HOLD_DELAY) nudge += hold.dir * lineH() * hold.unit;
+    hold = null;
+    return true;
+  }
   function onKeyUp(e) {
+    if (endHold(e)) { e.preventDefault(); return; }
     if (!press || e.key !== press.key) return;
     clearTimeout(press.t);
     const wasLong = press.long;
@@ -1964,7 +2008,7 @@ kbd {
   }
   document.addEventListener("keydown", onKeyDown);
   document.addEventListener("keyup", onKeyUp);
-  window.addEventListener("blur", () => { if (press) { clearTimeout(press.t); press = null; } });
+  window.addEventListener("blur", () => { if (press) { clearTimeout(press.t); press = null; } hold = null; });
 
   /* ---------- Wheel and touch ---------- */
   let wheelAcc = 0, wheelT = 0;
@@ -1981,7 +2025,7 @@ kbd {
 
   let drag = null;
   P.addEventListener("pointerdown", (e) => {
-    if (e.target.closest(".hud, .sheet")) return;
+    if (e.target.closest(".hud, .sheet, .focusexit")) return;
     drag = { last: e.clientY, total: 0, moved: 0 };
     try { P.setPointerCapture(e.pointerId); } catch (err) {}
   });
@@ -1999,6 +2043,7 @@ kbd {
     P.focus({ preventScroll: true });
     if (!tap && takeMode() && Math.abs(total) > 40) { goBeat(bi + (total < 0 ? 1 : -1)); return; }
     if (tap) {
+      if (inFocus()) { peekFocusExit(); return; }
       if (!$("sheet").hidden || !$("logSheet").hidden || !$("wrapSheet").hidden) { closeSheets(); return; }
       if (hud.classList.contains("away")) showHud(); else if (playing || rec) { hud.classList.add("away"); }
     }
@@ -2031,7 +2076,7 @@ kbd {
   function setMode(m) {
     if (S.mode === m) return;
     if (rec) stopTake();
-    playing = false; cancelCountdown(); v = 0; nudge = 0;
+    playing = false; cancelCountdown(); v = 0; nudge = 0; nudgeV = 0;
     S.mode = m; save();
     if (m === "takes") {
       // start on the line nearest the current scroll position
@@ -2100,17 +2145,30 @@ kbd {
 
   const root = document.documentElement;
   const fsReq = root.requestFullscreen || root.webkitRequestFullscreen;
-  const standalone = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
-  if (!fsReq || standalone) $("tFull").hidden = true;
-  $("tFull").addEventListener("click", (e) => {
-    e.stopPropagation();
+  const fsExit = document.exitFullscreen || document.webkitExitFullscreen;
+  const inBrowserFs = () => !!(document.fullscreenElement || document.webkitFullscreenElement);
+  const standalone = window.matchMedia("(display-mode: standalone)").matches || window.matchMedia("(display-mode: fullscreen)").matches || navigator.standalone === true;
+  let peekT = 0;
+  const inFocus = () => P.classList.contains("focus");
+  function setFocus(on) {
+    clearTimeout(peekT);
+    P.classList.remove("peek");
+    if (on) closeSheets();
+    P.classList.toggle("focus", on);
     try {
-      const inFs = document.fullscreenElement || document.webkitFullscreenElement;
-      if (inFs) (document.exitFullscreen || document.webkitExitFullscreen).call(document);
-      else { const p = fsReq.call(root); if (p && p.catch) p.catch(() => {}); }
+      if (on && fsReq && !standalone && !inBrowserFs()) { const r = fsReq.call(root); if (r && r.catch) r.catch(() => {}); }
+      if (!on && inBrowserFs()) fsExit.call(document);
     } catch (err) {}
+    if (!on) showHud(true);
     P.focus({ preventScroll: true });
-  });
+  }
+  function peekFocusExit() {
+    P.classList.add("peek");
+    clearTimeout(peekT);
+    peekT = setTimeout(() => P.classList.remove("peek"), 3000);
+  }
+  hb("focusBtn", () => setFocus(true));
+  $("focusExit").addEventListener("click", (e) => { e.stopPropagation(); setFocus(false); });
 
   async function grabWake() {
     try { if ("wakeLock" in navigator) wakeLock = await navigator.wakeLock.request("screen"); } catch (e) { wakeLock = null; }
@@ -2121,7 +2179,8 @@ kbd {
     if (document.activeElement) document.activeElement.blur();
     P.hidden = false;
     document.body.style.overflow = "hidden";
-    y = 0; v = 0; nudge = 0; playing = false; bi = 0; rec = null;
+    y = 0; v = 0; nudge = 0; nudgeV = 0; holdV = 0; playing = false; bi = 0; rec = null;
+    P.classList.remove("focus", "peek");
     closeSheets();
     build();
     applyLayout();
