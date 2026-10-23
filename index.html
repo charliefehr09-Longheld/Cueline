@@ -12,6 +12,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<script>window.CUELINE_APP = true;</script>
 <style>
 html { color-scheme: light; }
 body { margin: 0; font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; -webkit-text-size-adjust: 100%; }
@@ -266,10 +267,12 @@ kbd {
 .progress { position: absolute; left: 0; right: 0; top: 0; height: 3px; }
 .progress i { display: block; height: 100%; background: var(--eye); width: 0; opacity: 0.7; }
 
+.prompter.takemode .sizeread, .prompter.takemode .keydot { display: none; }
 .sheet {
   position: absolute; z-index: 6; right: max(12px, env(safe-area-inset-right, 0px));
-  bottom: calc(84px + env(safe-area-inset-bottom, 0px));
-  width: min(380px, calc(100vw - 32px)); max-height: 72vh; overflow-y: auto;
+  bottom: calc(var(--hud-h, 72px) + 12px);
+  width: min(380px, calc(100vw - 32px));
+  max-height: calc(100% - var(--hud-h, 72px) - 24px - env(safe-area-inset-top, 0px)); overflow-y: auto;
   background: var(--hud); color: var(--hud-fg); border: 1px solid var(--hud-line); border-radius: 12px;
   padding: 16px; display: grid; gap: 14px; box-sizing: border-box; align-content: start;
   backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
@@ -303,6 +306,49 @@ kbd {
 .exportbox { width: 100%; height: 120px; box-sizing: border-box; background: #0d0f12; color: var(--hud-fg); border: 1px solid var(--hud-line); border-radius: 8px; font-family: var(--font-mono); font-size: 0.72rem; padding: 8px; }
 .btnrow { display: flex; flex-wrap: wrap; gap: 8px; }
 .hb.danger.armed { background: var(--ng); border-color: var(--ng); color: #fff; }
+.hb.recsess { border-color: var(--ng); color: #ff9a95; }
+.hb.recsess.live { background: var(--ng); color: #fff; font-variant-numeric: tabular-nums; }
+.hb:disabled { opacity: 0.45; cursor: default; }
+.field input { background: #1b1f25; border: 1px solid var(--hud-line); border-radius: 8px; height: 40px; padding: 0 10px; color: var(--hud-fg); min-width: 0; }
+.choices { display: grid; gap: 6px; }
+.choice { display: flex; gap: 10px; align-items: flex-start; border: 1px solid var(--hud-line); border-radius: 8px; padding: 10px 12px; cursor: pointer; }
+.choice input { margin-top: 3px; accent-color: var(--eye); }
+.choice span { display: grid; gap: 2px; }
+.choice small { color: var(--hud-dim); font-family: var(--font-mono); font-size: 0.75rem; }
+.check { display: flex; gap: 10px; align-items: center; font-size: 0.9rem; }
+.check input { accent-color: var(--eye); width: 18px; height: 18px; }
+.adv summary { cursor: pointer; color: var(--hud-dim); font-size: 0.85rem; }
+.adv[open] { display: grid; gap: 10px; }
+.pbar { height: 6px; border-radius: 3px; background: #2a2f37; overflow: hidden; }
+.pbar i { display: block; height: 100%; width: 0; background: var(--eye); transition: width 0.2s; }
+.pline { display: grid; gap: 6px; font-size: 0.85rem; color: var(--hud-dim); }
+.flags { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 0.85rem; color: var(--hud-dim); }
+.flags b { color: var(--hud-fg); font-family: var(--font-mono); font-weight: 500; margin-right: 4px; }
+.modal {
+  position: fixed; inset: 0; z-index: 70; display: grid; place-items: center;
+  background: rgba(8, 10, 12, 0.6);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: calc(16px + env(safe-area-inset-top, 0px)) calc(16px + env(safe-area-inset-bottom, 0px));
+}
+.modal-card {
+  background: var(--surface); color: var(--fg); border: 1px solid var(--line); border-radius: 14px;
+  width: min(560px, 100%); max-height: 100%; overflow-y: auto; box-sizing: border-box; padding: 18px; display: grid; gap: 14px;
+}
+.modal-card h2 { margin: 0; font-size: 1.15rem; }
+.modal-card p { margin: 0; color: var(--muted); }
+.modal-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.modal-row input { flex: 1; min-width: 180px; border: 1px solid var(--line); border-radius: 8px; padding: 9px 12px; background: var(--bg); }
+.qr { background: #fff; border-radius: 10px; padding: 8px; display: grid; place-items: center; min-height: 120px; }
+.qr svg { width: 100%; max-width: 440px; height: auto; display: block; }
+.qr .hint { color: #444; padding: 16px; text-align: center; }
+.scanview { position: relative; border-radius: 10px; overflow: hidden; background: #000; aspect-ratio: 4 / 3; max-width: 100%; }
+.scanview video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.scanview::after { content: ""; position: absolute; inset: 14%; border: 2px solid var(--eye); border-radius: 12px; pointer-events: none; }
+.toast {
+  position: fixed; z-index: 80; left: 50%; transform: translateX(-50%);
+  bottom: calc(20px + env(safe-area-inset-bottom, 0px)); max-width: calc(100vw - 32px); box-sizing: border-box;
+  background: var(--fg); color: var(--bg); padding: 10px 16px; border-radius: 10px; font-size: 0.95rem;
+}
 @media (max-width: 640px) {
   .readout .opt { display: none; }
   .hb.play { min-width: 72px; }
@@ -323,6 +369,8 @@ kbd {
     <button class="btn" id="newBtn" type="button">New script</button>
     <label class="btn" for="importFile">Import .txt</label>
     <input type="file" id="importFile" accept=".txt,.md,.text,text/plain" hidden>
+    <button class="btn" id="scanBtn" type="button">Scan script</button>
+    <button class="btn" id="sendBtn" type="button">Send to iPad</button>
     <button class="btn primary" id="promptBtn" type="button">▶ Prompt</button>
   </div>
 
@@ -362,6 +410,7 @@ kbd {
         <tr><td><kbd>X</kbd></td><td>Mark the take scratch.</td></tr>
         <tr><td><kbd>S</kbd></td><td>Slate: white flash plus a sync point in the log.</td></tr>
         <tr><td><kbd>L</kbd></td><td>Open the take log.</td></tr>
+        <tr data-app><td>Record session</td><td>Records audio for the wrap-up package: transcript, script check, selects.</td></tr>
       </table>
     </div>
     <div class="panel syntax">
@@ -375,6 +424,33 @@ kbd {
     </div>
   </div>
 </div>
+
+<div class="modal" id="sendModal" hidden>
+  <div class="modal-card" role="dialog" aria-labelledby="sendTitle">
+    <h2 id="sendTitle">Send this script</h2>
+    <div class="qr" id="qrBox"></div>
+    <p id="sendMsg"></p>
+    <div class="modal-row">
+      <button class="btn" id="copyLink" type="button">Copy link</button>
+      <button class="btn primary" id="sendClose" type="button">Done</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="scanModal" hidden>
+  <div class="modal-card" role="dialog" aria-labelledby="scanTitle">
+    <h2 id="scanTitle">Scan a script</h2>
+    <div class="scanview" id="scanCam"><video id="scanVideo" playsinline muted autoplay></video></div>
+    <p id="scanMsg"></p>
+    <div class="modal-row">
+      <input id="pasteLink" type="url" placeholder="Or paste a Cueline link" aria-label="Cueline link" autocomplete="off" spellcheck="false">
+      <button class="btn" id="pasteGo" type="button">Open</button>
+    </div>
+    <div class="modal-row"><button class="btn primary" id="scanClose" type="button">Close</button></div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" hidden></div>
 
 <div class="prompter" id="prompter" tabindex="-1" hidden>
   <div class="stage" id="stage">
@@ -426,6 +502,7 @@ kbd {
       </label>
     </div>
     <p class="hint" id="zeroHint"></p>
+    <label class="check" for="selOnly"><input type="checkbox" id="selOnly"> Selects only (good takes)</label>
     <div class="btnrow">
       <button class="hb" id="saveEdl" type="button">Save Resolve markers</button>
       <button class="hb" id="saveCsv" type="button">Save CSV log</button>
@@ -434,7 +511,45 @@ kbd {
     </div>
     <p class="hint" id="exportMsg">Markers save as a .txt file. Rename it to .edl, then in Resolve use Timeline › Import › Timeline Markers from EDL.</p>
     <textarea class="exportbox" id="exportBox" aria-label="Export text" readonly hidden></textarea>
-    <div class="btnrow"><button class="hb danger" id="clearLog" type="button">Clear log</button></div>
+    <div class="btnrow">
+      <button class="hb play" id="wrapFromLog" type="button">Wrap and package…</button>
+      <button class="hb danger" id="clearLog" type="button">Clear log</button>
+    </div>
+  </div>
+
+  <div class="sheet wide" id="wrapSheet" hidden>
+    <h3>Wrap session</h3>
+    <label class="field" for="sessSel">Recording
+      <select id="sessSel"></select>
+    </label>
+    <div class="sumline" id="sessSum"></div>
+    <h3>Audio to transcribe</h3>
+    <div class="choices" role="radiogroup" aria-label="Audio to transcribe">
+      <label class="choice" for="am-good"><input type="radio" name="amode" id="am-good"><span><b>Good takes only</b><small id="am-good-len"></small></span></label>
+      <label class="choice" for="am-clean"><input type="radio" name="amode" id="am-clean"><span><b>Everything except scratch takes</b><small id="am-clean-len"></small></span></label>
+      <label class="choice" for="am-full"><input type="radio" name="amode" id="am-full"><span><b>Full recording</b><small id="am-full-len"></small></span></label>
+    </div>
+    <label class="check" for="incFull" id="incFullRow"><input type="checkbox" id="incFull"> Also include the full recording, for syncing in Resolve</label>
+    <h3>Transcription</h3>
+    <label class="check" for="doTx"><input type="checkbox" id="doTx"> Transcribe with AssemblyAI</label>
+    <div id="txFields" class="choices">
+      <div class="fields">
+        <label class="field" for="aaiKey">API key<input id="aaiKey" type="password" autocomplete="off" spellcheck="false" placeholder="Paste your AssemblyAI key"></label>
+        <label class="field" for="aaiRegion">Region<select id="aaiRegion"><option value="us">US</option><option value="eu">EU</option></select></label>
+      </div>
+      <details class="adv"><summary>Advanced</summary>
+        <label class="field" for="aaiLang">Language<select id="aaiLang"><option value="en">English</option><option value="auto">Detect automatically</option></select></label>
+        <label class="field" for="aaiRelay">Relay URL, only if direct uploads are blocked<input id="aaiRelay" type="url" autocomplete="off" spellcheck="false" placeholder="https://cueline-relay.yourname.workers.dev"></label>
+      </details>
+      <p class="hint">Your key stays on this device and is only sent to AssemblyAI.</p>
+    </div>
+    <div class="pline" id="pkgProg" hidden><div class="pbar"><i id="pkgBar"></i></div><span id="pkgMsg"></span></div>
+    <div id="pkgReport"></div>
+    <div class="btnrow">
+      <button class="hb play" id="pkgBuild" type="button">Build package</button>
+      <button class="hb good" id="pkgSave" type="button" hidden>Save package</button>
+      <button class="hb danger" id="pkgDelete" type="button">Delete recording</button>
+    </div>
   </div>
 
   <div class="hud" id="hud">
@@ -462,10 +577,11 @@ kbd {
       <button class="hb ng" id="ngBtn" type="button">✕ Scratch</button>
       <button class="hb" id="nextBeat" type="button" aria-label="Next line">›</button>
       <div class="readout">
-        <span>Line<b id="rLine">1/1</b></span>
-        <span class="opt">Got<b id="rGot">0</b></span>
+        <span class="opt">Line<b id="rLine">1</b></span>
+        <span>Got<b id="rGot">0/0 (0%)</b></span>
       </div>
       <button class="hb" id="slateBtn" type="button">Slate</button>
+      <button class="hb recsess" id="recBtn" type="button" title="Record the session audio" hidden>● Rec</button>
       <button class="hb" id="logBtn" type="button">Log</button>
     </div>
 
@@ -473,7 +589,7 @@ kbd {
     <div class="spacer"></div>
     <div class="grp" role="group" aria-label="Text size">
       <button class="hb" id="textSmaller" type="button" aria-label="Smaller text">A−</button>
-      <div class="readout opt"><span>Text<b id="rSize">64</b></span></div>
+      <div class="readout opt sizeread"><span>Text<b id="rSize">64</b></span></div>
       <button class="hb" id="textBigger" type="button" aria-label="Larger text"><span style="font-size:1.2em">A+</span></button>
     </div>
     <button class="hb" id="mirrorBtn" type="button" aria-pressed="false">Mirror</button>
@@ -501,7 +617,7 @@ kbd {
 
   const DEFAULTS = {
     size: 64, width: 82, lead: 1.35, eye: 30, mirror: false, flip: false, count: true, speed: 70,
-    mode: "scroll", split: "para", advance: true, fps: "25", zero: "auto"
+    mode: "scroll", split: "para", advance: true, fps: "25", zero: "auto", amode: "good", selectsOnly: false
   };
 
   let store = load();
@@ -645,6 +761,8 @@ kbd {
   }
   twoTap($("delBtn"), "Delete", () => {
     delete store.logs[store.current];
+    store.sessions.filter((m) => m.scriptId === store.current).forEach((m) => idbDelete(m.id).catch(() => {}));
+    store.sessions = store.sessions.filter((m) => m.scriptId !== store.current);
     store.scripts = store.scripts.filter((s) => s.id !== store.current);
     if (!store.scripts.length) store.scripts.push({ id: "s" + Date.now().toString(36), title: "New script", body: "", updated: Date.now() });
     store.current = store.scripts[0].id; save(); renderAll();
@@ -728,10 +846,12 @@ kbd {
       $("rLeft").textContent = S.speed > 0 ? fmt((maxY - y) / S.speed) : "–";
       $("playBtn").textContent = playing ? "Pause" : (countdownT ? "Cancel" : "Play");
     } else {
-      $("rLine").textContent = (beats.length ? bi + 1 : 0) + "/" + beats.length;
+      $("rLine").textContent = beats.length ? bi + 1 : 0;
       const lg = logFor(cur().id);
-      const got = new Set(lg.takes.filter((t) => t.mark === "good").map((t) => t.beat)).size;
-      $("rGot").textContent = got;
+      const got = new Set(lg.takes.filter((t) => t.mark === "good" && t.beat <= beats.length).map((t) => t.beat)).size;
+      const gotText = got + "/" + beats.length + " (" + (beats.length ? Math.round((got / beats.length) * 100) : 0) + "%)";
+      if ($("rGot").textContent !== gotText) $("rGot").textContent = gotText;
+      renderRec();
       const tb = $("takeBtn");
       tb.classList.toggle("live", !!rec);
       tb.textContent = rec ? "■ Stop " + fmt((Date.now() - rec.start) / 1000) : "● Take";
@@ -858,6 +978,7 @@ kbd {
     const lg = logFor(cur().id);
     const take = takesFor(b.n).length + 1;
     const entry = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5), beat: b.n, take, section: b.section, text: b.text, start: Date.now(), end: null, mark: null };
+    if (recSess) { entry.sid = recSess.meta.id; entry.rs = recPos(); }
     lg.takes.push(entry);
     rec = entry;
     save(); renderTag(bi); scheduleHide();
@@ -865,6 +986,7 @@ kbd {
   function stopTake() {
     if (!rec) return;
     rec.end = Date.now();
+    if (rec.sid && recSess && recSess.meta.id === rec.sid) rec.re = recPos();
     const i = beats.findIndex((b) => b.n === rec.beat);
     rec = null;
     save(); renderTag(i); idleStatus(); showHud(true);
@@ -889,7 +1011,7 @@ kbd {
   function slate() {
     const lg = logFor(cur().id);
     const n = lg.slates.length + 1;
-    lg.slates.push({ n, t: Date.now() });
+    lg.slates.push(recSess ? { n, t: Date.now(), sid: recSess.meta.id, rs: recPos() } : { n, t: Date.now() });
     save();
     const el = $("slate");
     el.textContent = "SLATE " + n;
@@ -961,6 +1083,7 @@ kbd {
     const z = resolveZero();
     sel.innerHTML = zeroOptions().map((o) => '<option value="' + o.v + '"' + (o.v === z ? " selected" : "") + ">" + esc(o.label) + "</option>").join("");
     $("fpsSel").value = S.fps;
+    $("selOnly").checked = S.selectsOnly === true;
     $("zeroHint").textContent = z === "tod"
       ? "Markers use the time of day. Works when your camera records time-of-day timecode and its clock matches this device."
       : "Put the clip on a timeline starting at 01:00:00:00 with the slate's white frame as the first frame, then import. Takes before this slate are left out.";
@@ -980,8 +1103,8 @@ kbd {
   const safeName = (s) => (s || "script").replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-").slice(0, 40) || "script";
   function buildEdl() {
     const s = cur(), lg = logFor(s.id);
-    let n = 0, out = "TITLE: Cueline " + safeName(s.title) + "\nFCM: NON-DROP FRAME\n\n";
-    lg.takes.forEach((t) => {
+    let n = 0, out = "TITLE: Cueline " + safeName(s.title) + (S.selectsOnly ? " selects" : "") + "\nFCM: NON-DROP FRAME\n\n";
+    lg.takes.filter((t) => !S.selectsOnly || t.mark === "good").forEach((t) => {
       const tc = takeTC(t);
       if (!tc) return;
       n += 1;
@@ -998,7 +1121,7 @@ kbd {
     const s = cur(), lg = logFor(s.id);
     const q = (v) => '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"';
     const rows = [["script", "line", "section", "take", "mark", "start_clock", "end_clock", "duration_s", "tc_in", "tc_out", "text"]];
-    lg.takes.forEach((t) => {
+    lg.takes.filter((t) => !S.selectsOnly || t.mark === "good").forEach((t) => {
       const tc = takeTC(t);
       rows.push([s.title, t.beat, t.section, t.take, t.mark || "", clock(t.start), t.end ? clock(t.end) : "",
         t.end ? ((t.end - t.start) / 1000).toFixed(1) : "", tc ? tcFromFrames(tc.inF, tc.base) : "", tc ? tcFromFrames(tc.outF, tc.base) : "", t.text]);
@@ -1008,7 +1131,8 @@ kbd {
   const fail = (code) => { const e = new Error(code); e.code = code; return e; };
   let downloads = {
     async save({ filename, data }) {
-      const type = filename.endsWith(".csv") ? "text/csv" : "text/plain";
+      const ext = filename.split(".").pop().toLowerCase();
+      const type = { csv: "text/csv", zip: "application/zip", wav: "audio/wav", json: "application/json" }[ext] || "text/plain";
       const file = new File([data], filename, { type });
       const touch = navigator.maxTouchPoints > 1;
       if (touch && navigator.canShare && navigator.canShare({ files: [file] })) {
@@ -1050,16 +1174,16 @@ kbd {
   const stamp = () => { const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
   $("saveEdl").addEventListener("click", () => {
     const e = buildEdl();
-    if (!e.count) { exportMsg("No takes to export at this zero point."); return; }
-    saveFile("cueline-" + safeName(cur().title) + "-" + stamp() + "-markers.txt", e.text, "Saved " + e.count + " markers. Rename the file to .edl before importing.");
+    if (!e.count) { exportMsg(S.selectsOnly ? "No good takes to export at this zero point." : "No takes to export at this zero point."); return; }
+    saveFile("cueline-" + safeName(cur().title) + "-" + stamp() + (S.selectsOnly ? "-selects" : "") + "-markers.txt", e.text, "Saved " + e.count + " markers. Rename the file to .edl before importing.");
   });
   $("saveCsv").addEventListener("click", () => {
     if (!logFor(cur().id).takes.length) { exportMsg("No takes to export yet."); return; }
-    saveFile("cueline-" + safeName(cur().title) + "-" + stamp() + "-takes.csv", buildCsv(), "Saved the take log.");
+    saveFile("cueline-" + safeName(cur().title) + "-" + stamp() + (S.selectsOnly ? "-selects" : "-takes") + ".csv", buildCsv(), "Saved the take log.");
   });
   $("copyEdl").addEventListener("click", () => {
     const e = buildEdl();
-    if (!e.count) { exportMsg("No takes to export at this zero point."); return; }
+    if (!e.count) { exportMsg(S.selectsOnly ? "No good takes to export at this zero point." : "No takes to export at this zero point."); return; }
     copyText(e.text, "Copied " + e.count + " markers. Paste into a text file named something.edl.");
   });
   $("copyCsv").addEventListener("click", () => {
@@ -1073,7 +1197,688 @@ kbd {
     save(); renderLog(); beatEls.forEach((el, i) => renderTag(i)); idleStatus();
   });
 
+  /* ==========================================================
+     Session recording, wrap package, selects, script links/QR
+     ========================================================== */
+  const APP = window.CUELINE_APP === true;
+  const APP_URL = APP ? location.origin + location.pathname : "https://charliefehr09-longheld.github.io/Cueline/";
+  const CAN_REC = APP && !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia) && typeof AudioWorkletNode !== "undefined";
+  const SR = 16000;
+  const PRE = 0.25, POST = 0.6, GAP = 1.0;
+  store.sessions = store.sessions || [];
+  store.sessions.forEach((m) => { if (m.state === "recording") m.state = "interrupted"; });
+  const errOf = (code, message) => { const e = new Error(message || code); e.code = code; return e; };
+  const pct = (x) => Math.round(x * 100) + "%";
+  const hms = (sec, sep = ".") => {
+    sec = Math.max(0, sec);
+    const h = Math.floor(sec / 3600), m = Math.floor(sec / 60) % 60, s = Math.floor(sec % 60), ms = Math.round((sec % 1) * 1000) % 1000;
+    return [h, m, s].map((n) => String(n).padStart(2, "0")).join(":") + sep + String(ms).padStart(3, "0");
+  };
+  const dur = (sec) => sec >= 3600 ? Math.floor(sec / 3600) + ":" + fmt(sec % 3600).padStart(5, "0") : fmt(sec);
+
+  /* ---- audio storage (IndexedDB, 16 kHz mono 16-bit PCM in ~5 s chunks) ---- */
+  let dbP = null;
+  function idb() {
+    if (!dbP) dbP = new Promise((res, rej) => {
+      const r = indexedDB.open("cueline-audio", 1);
+      r.onupgradeneeded = () => r.result.createObjectStore("chunks");
+      r.onsuccess = () => res(r.result);
+      r.onerror = () => rej(r.error);
+    });
+    return dbP;
+  }
+  const range = (sid) => IDBKeyRange.bound([sid, 0], [sid, Number.MAX_SAFE_INTEGER]);
+  async function idbPut(key, val) {
+    const db = await idb();
+    return new Promise((res, rej) => { const tx = db.transaction("chunks", "readwrite"); tx.objectStore("chunks").put(val, key); tx.oncomplete = res; tx.onerror = () => rej(tx.error); });
+  }
+  async function idbChunks(sid) {
+    const db = await idb();
+    return new Promise((res, rej) => {
+      const out = []; const tx = db.transaction("chunks");
+      const req = tx.objectStore("chunks").openCursor(range(sid));
+      req.onsuccess = () => { const c = req.result; if (c) { out.push(new Int16Array(c.value)); c.continue(); } };
+      tx.oncomplete = () => res(out); tx.onerror = () => rej(tx.error);
+    });
+  }
+  async function idbDelete(sid) {
+    const db = await idb();
+    return new Promise((res, rej) => { const tx = db.transaction("chunks", "readwrite"); tx.objectStore("chunks").delete(range(sid)); tx.oncomplete = res; tx.onerror = () => rej(tx.error); });
+  }
+
+  /* ---- capture ---- */
+  const WORKLET = "class C extends AudioWorkletProcessor{constructor(){super();this.r=sampleRate/16000;this.ph=0;this.s=0;this.c=0;this.b=new Int16Array(8000);this.n=0;this.pk=0;this.port.onmessage=e=>{if(e.data==='flush'){this.post(true);}};}" +
+    "post(f){if(this.n===0){if(f)this.port.postMessage({pcm:new ArrayBuffer(0),peak:0,flushed:true});return;}const o=this.b.slice(0,this.n);this.port.postMessage({pcm:o.buffer,peak:this.pk,flushed:!!f},[o.buffer]);this.n=0;this.pk=0;}" +
+    "process(inputs){const ch=inputs[0]&&inputs[0][0];if(!ch)return true;for(let i=0;i<ch.length;i++){this.s+=ch[i];this.c++;this.ph+=1;if(this.ph>=this.r){this.ph-=this.r;let v=this.s/this.c;this.s=0;this.c=0;const a=v<0?-v:v;if(a>this.pk)this.pk=a;v=v>1?1:v<-1?-1:v;this.b[this.n++]=v<0?v*32768:v*32767;if(this.n===this.b.length)this.post(false);}}return true;}}" +
+    "registerProcessor('cueline-cap',C);";
+  let recSess = null;
+  const recPos = () => recSess ? (recSess.samples + Math.min(0.6, (performance.now() - recSess.lastPostAt) / 1000) * SR) / SR : null;
+
+  function flushChunks(sess) {
+    if (!sess.pendingSamples) return sess.flushing;
+    const all = new Int16Array(sess.pendingSamples); let o = 0;
+    sess.pending.forEach((p) => { all.set(p, o); o += p.length; });
+    sess.pending = []; sess.pendingSamples = 0;
+    const seq = sess.meta.chunks++;
+    sess.flushing = sess.flushing.then(() => idbPut([sess.meta.id, seq], all.buffer)).then(() => {
+      sess.meta.samples += all.length; save();
+    }).catch(() => { setStatus("COULDN'T SAVE AUDIO · IS THE IPAD FULL?", "note", 5000); });
+    return sess.flushing;
+  }
+
+  async function startRecording() {
+    if (recSess || !CAN_REC) return;
+    let stream, ctx;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: true, autoGainControl: true, channelCount: 1 } });
+    } catch (err) { setStatus("MICROPHONE BLOCKED · ALLOW IT IN SETTINGS", "note", 4000); return; }
+    try {
+      ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const url = URL.createObjectURL(new Blob([WORKLET], { type: "text/javascript" }));
+      await ctx.audioWorklet.addModule(url);
+      const node = new AudioWorkletNode(ctx, "cueline-cap");
+      const mute = ctx.createGain(); mute.gain.value = 0;
+      ctx.createMediaStreamSource(stream).connect(node); node.connect(mute); mute.connect(ctx.destination);
+      await ctx.resume();
+      const meta = { id: "r" + Date.now().toString(36), scriptId: cur().id, title: cur().title, created: Date.now(), samples: 0, chunks: 0, state: "recording" };
+      store.sessions.push(meta); save();
+      const sess = { meta, ctx, stream, node, pending: [], pendingSamples: 0, samples: 0, lastPostAt: performance.now(), peak: 0, flushing: Promise.resolve(), onFlushed: null };
+      node.port.onmessage = (e) => {
+        const pcm = new Int16Array(e.data.pcm);
+        if (pcm.length) {
+          sess.pending.push(pcm); sess.pendingSamples += pcm.length;
+          sess.samples += pcm.length; sess.lastPostAt = performance.now(); sess.peak = e.data.peak;
+          if (sess.pendingSamples >= SR * 5) flushChunks(sess);
+        }
+        if (e.data.flushed && sess.onFlushed) sess.onFlushed();
+      };
+      recSess = sess;
+      setStatus("● RECORDING SESSION", "rec", 1400);
+    } catch (err) {
+      stream.getTracks().forEach((t) => t.stop());
+      try { ctx && ctx.close(); } catch (e) {}
+      setStatus("RECORDING ISN'T AVAILABLE HERE", "note", 3000);
+    }
+    renderRec();
+  }
+
+  async function stopRecording() {
+    if (!recSess) return null;
+    if (rec) stopTake();
+    const sess = recSess;
+    await new Promise((res) => { const t = setTimeout(res, 500); sess.onFlushed = () => { clearTimeout(t); res(); }; sess.node.port.postMessage("flush"); });
+    recSess = null;
+    await flushChunks(sess);
+    sess.stream.getTracks().forEach((t) => t.stop());
+    try { await sess.ctx.close(); } catch (e) {}
+    sess.meta.state = "done"; save();
+    renderRec();
+    return sess.meta;
+  }
+
+  document.addEventListener("visibilitychange", () => {
+    if (recSess && document.visibilityState === "visible" && recSess.ctx.state !== "running") recSess.ctx.resume().catch(() => {});
+  });
+
+  let recArm = 0, recLabel = "";
+  function renderRec() {
+    const b = $("recBtn");
+    if (!CAN_REC) { b.hidden = true; return; }
+    b.hidden = false;
+    b.classList.toggle("live", !!recSess);
+    const label = !recSess ? "● Rec" : recArm ? "Tap again to stop" : "REC " + dur(recPos() || 0);
+    if (label !== recLabel) { b.textContent = label; recLabel = label; }
+  }
+
+  /* ---- session helpers ---- */
+  const sessionsFor = (scriptId) => store.sessions.filter((m) => m.scriptId === scriptId).sort((a, b) => b.created - a.created);
+  const sessTakes = (meta) => logFor(meta.scriptId).takes.filter((t) => t.sid === meta.id && t.rs != null && t.re != null).sort((a, b) => a.rs - b.rs);
+  function rangesFor(meta, mode) {
+    const total = meta.samples / SR;
+    if (mode === "full") return [{ take: null, a: 0, b: total }];
+    const ts = sessTakes(meta).filter((t) => mode === "good" ? t.mark === "good" : t.mark !== "ng");
+    const out = [];
+    ts.forEach((t) => {
+      let a = Math.max(0, t.rs - PRE); const b = Math.min(total, t.re + POST);
+      if (out.length && a < out[out.length - 1].b) a = out[out.length - 1].b;
+      if (b > a) out.push({ take: t, a, b });
+    });
+    return out;
+  }
+  const rangesLength = (rs) => rs.reduce((s, r) => s + (r.b - r.a), 0) + Math.max(0, rs.length - 1) * GAP;
+
+  function wavHeader(samples) {
+    const b = new ArrayBuffer(44), v = new DataView(b);
+    const w = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+    w(0, "RIFF"); v.setUint32(4, 36 + samples * 2, true); w(8, "WAVE"); w(12, "fmt ");
+    v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, SR, true);
+    v.setUint32(28, SR * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); w(36, "data"); v.setUint32(40, samples * 2, true);
+    return b;
+  }
+  function sliceSamples(chunks, a, b) {
+    const parts = []; let off = 0;
+    for (const c of chunks) {
+      const s = off, e = off + c.length;
+      if (e > a && s < b) parts.push(c.subarray(Math.max(a, s) - s, Math.min(b, e) - s));
+      off = e; if (off >= b) break;
+    }
+    return parts;
+  }
+  function buildAudio(chunks, ranges) {
+    const parts = [], segs = []; let out = 0;
+    const gap = new Int16Array(Math.round(GAP * SR));
+    ranges.forEach((r, i) => {
+      if (i) { parts.push(gap); out += gap.length; }
+      const a = Math.round(r.a * SR), b = Math.round(r.b * SR);
+      const p = sliceSamples(chunks, a, b);
+      const n = p.reduce((s, x) => s + x.length, 0);
+      segs.push({ take: r.take, src: a / SR, out: out / SR, len: n / SR });
+      parts.push(...p); out += n;
+    });
+    return { blob: new Blob([wavHeader(out), ...parts], { type: "audio/wav" }), segs, seconds: out / SR };
+  }
+
+  /* ---- AssemblyAI ---- */
+  const keyStore = {
+    get() { try { return localStorage.getItem("cueline.aaiKey") || ""; } catch (e) { return ""; } },
+    set(v) { try { v ? localStorage.setItem("cueline.aaiKey", v) : localStorage.removeItem("cueline.aaiKey"); } catch (e) {} },
+  };
+  const aaiBase = () => {
+    const relay = (S.aaiRelay || "").trim().replace(/\/+$/, "");
+    if (relay) return relay;
+    return S.aaiRegion === "eu" ? "https://api.eu.assemblyai.com" : "https://api.assemblyai.com";
+  };
+  const NET_HELP = "Couldn't reach AssemblyAI. If you're online, the browser may be blocking direct uploads: add a relay URL under Advanced (see the README on GitHub).";
+  function httpErr(status, body) {
+    let msg = ""; try { msg = JSON.parse(body).error || ""; } catch (e) { msg = String(body || "").slice(0, 160); }
+    if (status === 401) return errOf("auth", "AssemblyAI didn't accept the API key. Check it under Transcription.");
+    return errOf("http", "AssemblyAI said " + status + (msg ? ": " + msg : "") + ".");
+  }
+  function aaiUpload(blob, onProgress) {
+    return new Promise((res, rej) => {
+      const x = new XMLHttpRequest();
+      x.open("POST", aaiBase() + "/v2/upload");
+      x.setRequestHeader("authorization", keyStore.get());
+      x.setRequestHeader("content-type", "application/octet-stream");
+      x.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(e.loaded / e.total); };
+      x.onload = () => {
+        if (x.status >= 200 && x.status < 300) { try { res(JSON.parse(x.responseText).upload_url); } catch (e) { rej(errOf("http", "AssemblyAI sent an unexpected answer.")); } }
+        else rej(httpErr(x.status, x.responseText));
+      };
+      x.onerror = () => rej(errOf("network", NET_HELP));
+      x.send(blob);
+    });
+  }
+  async function aaiJson(path, body) {
+    let r;
+    try {
+      r = await fetch(aaiBase() + path, body
+        ? { method: "POST", headers: { authorization: keyStore.get(), "content-type": "application/json" }, body: JSON.stringify(body) }
+        : { headers: { authorization: keyStore.get() } });
+    } catch (e) { throw errOf("network", NET_HELP); }
+    const t = await r.text();
+    if (!r.ok) throw httpErr(r.status, t);
+    return JSON.parse(t);
+  }
+  function keyterms(text) {
+    const seen = new Set(), out = [];
+    const clean = text.replace(/\[[^\]]*\]/g, " ").replace(/^#.*$/gm, " ");
+    clean.split(/(?<=[.!?:;])\s+|\n+/).forEach((sentence) => {
+      const words = sentence.match(/[A-Za-zÀ-ÿ][\w'’-]*/g) || [];
+      words.forEach((w, i) => {
+        const word = w.replace(/[’']s$/, "");
+        const proper = i > 0 && word.length > 2 && /^[A-ZÀ-Þ]/.test(word);
+        const key = word.toLowerCase();
+        if ((proper || word.length >= 9) && !seen.has(key)) { seen.add(key); out.push(word); }
+      });
+    });
+    return out.slice(0, 100);
+  }
+  async function aaiTranscribe(audioUrl, scriptText, onStatus) {
+    const base = { audio_url: audioUrl, punctuate: true, format_text: true };
+    if (S.aaiLang === "auto") base.language_detection = true; else base.language_code = "en";
+    const terms = keyterms(scriptText);
+    let job;
+    try { job = await aaiJson("/v2/transcript", terms.length ? { ...base, keyterms_prompt: terms } : base); }
+    catch (e) { if (e.code === "http" && terms.length) job = await aaiJson("/v2/transcript", base); else throw e; }
+    const started = Date.now();
+    for (;;) {
+      await new Promise((r) => setTimeout(r, 3000));
+      const j = await aaiJson("/v2/transcript/" + job.id);
+      if (j.status === "completed") return j;
+      if (j.status === "error") throw errOf("http", "Transcription failed: " + (j.error || "unknown error"));
+      onStatus(j.status === "queued" ? "Waiting in AssemblyAI's queue…" : "Transcribing… " + dur((Date.now() - started) / 1000));
+    }
+  }
+
+  /* ---- script vs said ---- */
+  const tokens = (t) => String(t || "").toLowerCase().replace(/\[[^\]]*\]/g, " ").replace(/[’‘]/g, "'").replace(/[^a-z0-9à-ÿ'\s-]/g, " ").replace(/-/g, " ").split(/\s+/).map((w) => w.replace(/^'+|'+$/g, "")).filter(Boolean);
+  function compare(scriptText, saidText) {
+    const a = tokens(scriptText), b = tokens(saidText), n = a.length, m = b.length;
+    if (!n && !m) return { accuracy: 1, missed: [], extra: [] };
+    const D = Array.from({ length: n + 1 }, (_, i) => { const r = new Uint32Array(m + 1); r[0] = i; return r; });
+    for (let j = 0; j <= m; j++) D[0][j] = j;
+    for (let i = 1; i <= n; i++) for (let j = 1; j <= m; j++)
+      D[i][j] = Math.min(D[i - 1][j] + 1, D[i][j - 1] + 1, D[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    let i = n, j = m, matches = 0; const missed = [], extra = [];
+    while (i > 0 || j > 0) {
+      if (i > 0 && j > 0 && a[i - 1] === b[j - 1] && D[i][j] === D[i - 1][j - 1]) { matches++; i--; j--; }
+      else if (i > 0 && j > 0 && D[i][j] === D[i - 1][j - 1] + 1) { missed.push(a[i - 1]); extra.push(b[j - 1]); i--; j--; }
+      else if (i > 0 && D[i][j] === D[i - 1][j] + 1) { missed.push(a[i - 1]); i--; }
+      else { extra.push(b[j - 1]); j--; }
+    }
+    return { accuracy: (2 * matches) / (n + m), missed: missed.reverse(), extra: extra.reverse() };
+  }
+
+  /* ---- package ---- */
+  function loadScript(src, global) {
+    if (window[global]) return Promise.resolve(window[global]);
+    return new Promise((res, rej) => {
+      const s = document.createElement("script"); s.src = src;
+      s.onload = () => (window[global] ? res(window[global]) : rej(errOf("lib")));
+      s.onerror = () => rej(errOf("lib", "Couldn't load a helper library. Check the connection and try again."));
+      document.head.appendChild(s);
+    });
+  }
+  const JSZIP_URL = "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js";
+
+  function edlFor(items, title) {
+    const base = FPS_BASE(S.fps), fps = parseFloat(S.fps), origin = 3600 * base;
+    let n = 0, out = "TITLE: Cueline " + safeName(title) + "\nFCM: NON-DROP FRAME\n\n";
+    items.forEach((t) => {
+      n += 1;
+      const inF = origin + Math.round(t.start * fps), outF = origin + Math.round(t.end * fps);
+      const a = tcFromFrames(inF, base), b = tcFromFrames(inF + 1, base);
+      const color = t.mark === "good" ? "ResolveColorGreen" : t.mark === "scratch" ? "ResolveColorRed" : "ResolveColorBlue";
+      const label = (t.slate + (t.accuracy != null ? " " + pct(t.accuracy) : "") + " - " + t.script).replace(/\|/g, "/").slice(0, 90);
+      out += String(n).padStart(3, "0") + "  001      V     C        " + a + " " + b + " " + a + " " + b + "  \n";
+      out += " |C:" + color + " |M:" + label + " |D:" + Math.max(1, outF - inF) + "\n\n";
+    });
+    return out;
+  }
+  function csvFor(items) {
+    const q = (v) => '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"';
+    const rows = [["slate", "line", "section", "take", "mark", "start", "end", "start_s", "end_s", "accuracy", "script", "said"]];
+    items.forEach((t) => rows.push([t.slate, t.line, t.section, t.take, t.mark || "", hms(t.start), hms(t.end), t.start, t.end,
+      t.accuracy == null ? "" : t.accuracy, t.script, t.said || ""]));
+    return rows.map((r) => r.map(q).join(",")).join("\n") + "\n";
+  }
+  function srtFor(items) {
+    let n = 0, out = "";
+    const cue = (a, b, text) => { n++; out += n + "\n" + hms(a, ",") + " --> " + hms(Math.max(b, a + 0.4), ",") + "\n" + text + "\n\n"; };
+    items.forEach((t) => {
+      if (!t.words.length) { cue(t.start, t.end, "[" + t.slate + "] " + t.script); return; }
+      let group = [];
+      const flush = (first) => { if (!group.length) return; cue(group[0].start, group[group.length - 1].end, (first ? "[" + t.slate + "] " : "") + group.map((w) => w.text).join(" ")); group = []; };
+      let first = true;
+      t.words.forEach((w) => {
+        if (group.length && (group.length >= 8 || w.end - group[0].start > 3.2)) { flush(first); first = false; }
+        group.push(w);
+      });
+      flush(first);
+    });
+    return out;
+  }
+
+  let pkg = null;   // { sid, zipBlob, name, report }
+  let building = false;
+
+  async function buildPackage(meta, mode, transcribe, includeFull, onProg) {
+    const script = store.scripts.find((s) => s.id === meta.scriptId) || { title: meta.title, body: "" };
+    const lineList = beatsOf(parse(script.body), S.split);
+    onProg(0.02, "Reading the recording…");
+    const chunks = await idbChunks(meta.id);
+    const total = chunks.reduce((s, c) => s + c.length, 0);
+    if (!total) throw errOf("empty", "This recording has no audio saved.");
+    meta.samples = total;
+    const ranges = rangesFor(meta, mode);
+    if (!ranges.length) throw errOf("empty", mode === "good" ? "No takes are marked good in this recording yet." : "No takes in this recording to package.");
+    const audio = buildAudio(chunks, ranges);
+    const full = mode === "full" ? audio : (includeFull ? buildAudio(chunks, [{ take: null, a: 0, b: total / SR }]) : null);
+    const takes = sessTakes(meta);
+
+    let tx = null;
+    if (transcribe) {
+      if (!keyStore.get()) throw errOf("auth", "Add your AssemblyAI API key first.");
+      onProg(0.05, "Uploading " + dur(audio.seconds) + " of audio…");
+      const url = await aaiUpload(audio.blob, (f) => onProg(0.05 + f * 0.45, "Uploading… " + pct(f)));
+      onProg(0.52, "Sent. Waiting for AssemblyAI…");
+      tx = await aaiTranscribe(url, script.body, (msg) => onProg(0.7, msg));
+    }
+
+    onProg(0.85, "Reconciling the script with what you said…");
+    const words = (tx && tx.words) || [];
+    const byTake = new Map(); const loose = [];
+    words.forEach((w) => {
+      const t0 = w.start / 1000, t1 = w.end / 1000, mid = (t0 + t1) / 2;
+      const seg = audio.segs.find((g) => mid >= g.out - 0.05 && mid <= g.out + g.len + 0.05);
+      if (!seg) return;
+      const d = seg.src - seg.out, at = mid + d;
+      const take = seg.take || takes.find((t) => at >= t.rs - PRE && at <= t.re + POST) || null;
+      const item = { text: w.text, start: +(t0 + d).toFixed(3), end: +(t1 + d).toFixed(3), confidence: w.confidence };
+      if (take) { if (!byTake.has(take.id)) byTake.set(take.id, []); byTake.get(take.id).push(item); } else loose.push(item);
+    });
+    const inAudio = new Set(audio.segs.map((g) => g.take && g.take.id).filter(Boolean));
+    const items = takes.map((t) => {
+      const ws = byTake.get(t.id) || [];
+      const said = ws.map((w) => w.text).join(" ");
+      const transcribed = !!tx && (mode === "full" || inAudio.has(t.id));
+      const cmp = transcribed ? compare(t.text, said) : null;
+      const mark = t.mark === "good" ? "good" : t.mark === "ng" ? "scratch" : null;
+      return {
+        slate: "L" + t.beat + " T" + t.take + (mark ? " " + mark.toUpperCase() : ""),
+        takeId: t.id, line: t.beat, take: t.take, section: t.section || "", mark,
+        start: +t.rs.toFixed(3), end: +t.re.toFixed(3),
+        script: t.text, said: transcribed ? said : null,
+        accuracy: cmp ? +cmp.accuracy.toFixed(3) : null,
+        missed: cmp ? cmp.missed : [], extra: cmp ? cmp.extra : [],
+        transcribed, words: ws,
+      };
+    });
+
+    // per-line summary and flags
+    const lines = lineList.map((l) => {
+      const ts = items.filter((t) => t.line === l.n);
+      const good = ts.filter((t) => t.mark === "good");
+      const pool = good.length ? good : ts.filter((t) => t.mark !== "scratch");
+      const best = pool.slice().sort((x, y) => (y.accuracy || 0) - (x.accuracy || 0) || y.take - x.take)[0] || null;
+      return { line: l.n, section: l.section || "", script: l.text, takes: ts.length, goodTakes: good.length, bestTake: best ? best.take : null };
+    });
+    const flags = [];
+    items.forEach((t) => {
+      if (t.mark === "good" && t.accuracy != null && t.accuracy < 0.85)
+        flags.push({ slate: t.slate, text: "Marked good, but only " + pct(t.accuracy) + " matches the script" + (t.missed.length ? " (missed: " + t.missed.slice(0, 5).join(", ") + ")" : "") + "." });
+    });
+    lines.forEach((l) => {
+      if (l.takes && !l.goodTakes) {
+        const cands = items.filter((t) => t.line === l.line && t.accuracy != null).sort((x, y) => y.accuracy - x.accuracy);
+        flags.push({ slate: "L" + l.line, text: "No good take" + (cands.length ? "; closest is T" + cands[0].take + " at " + pct(cands[0].accuracy) : "") + "." });
+      } else if (!l.takes) flags.push({ slate: "L" + l.line, text: "Not filmed in this recording." });
+    });
+
+    // files
+    onProg(0.9, "Building the package…");
+    const JSZip = await loadScript(JSZIP_URL, "JSZip");
+    const zip = new JSZip();
+    const name = "cueline-" + safeName(script.title) + "-" + new Date(meta.created).toISOString().slice(0, 16).replace(/[:T]/g, "-");
+    const modeLabel = { good: "good takes only", clean: "everything except scratch takes", full: "the full recording" }[mode];
+    const audioFile = mode === "full" ? "audio/full-recording.wav" : "audio/" + (mode === "good" ? "good-takes" : "clean-takes") + ".wav";
+    const selects = items.filter((t) => t.mark === "good");
+    const session = {
+      format: "cueline-session/1",
+      script: { title: script.title, text: script.body },
+      session: {
+        id: meta.id, recordedAt: new Date(meta.created).toISOString(), durationSeconds: +(total / SR).toFixed(3), sampleRate: SR,
+        timeBase: "All start/end values are seconds from the start of the full recording.",
+        fullRecording: full ? "audio/full-recording.wav" : null,
+        transcribedAudio: { file: audioFile, contents: modeLabel, durationSeconds: +audio.seconds.toFixed(3),
+          segments: audio.segs.map((g) => ({ slate: g.take ? (items.find((t) => t.takeId === g.take.id) || {}).slate || null : null, recordingStart: +g.src.toFixed(3), fileStart: +g.out.toFixed(3), duration: +g.len.toFixed(3) })) },
+      },
+      transcription: tx ? { provider: "AssemblyAI", id: tx.id, language: tx.language_code || null, audio: modeLabel } : null,
+      summary: { lines: lines.length, linesWithGoodTake: lines.filter((l) => l.goodTakes).length, takes: items.length, goodTakes: selects.length, flags },
+      lines, takes: items, betweenTakes: loose,
+    };
+    zip.file("session.json", JSON.stringify(session, null, 2));
+
+    let md = "# " + script.title + "\n\nRecorded " + new Date(meta.created).toLocaleString() + " · " + dur(total / SR) + " · " + items.length + " takes · " +
+      lines.filter((l) => l.goodTakes).length + "/" + lines.length + " lines got\n" + (tx ? "Transcribed: " + modeLabel + " (AssemblyAI)\n" : "Not transcribed\n");
+    if (flags.length) md += "\n## Check these\n\n" + flags.map((f) => "- **" + f.slate + "**: " + f.text).join("\n") + "\n";
+    let section = null;
+    items.slice().sort((x, y) => x.line - y.line || x.take - y.take).forEach((t) => {
+      if (t.section !== section) { section = t.section; md += "\n## " + (section || "Untitled section") + "\n"; }
+      md += "\n### " + t.slate + " · " + hms(t.start) + " to " + hms(t.end) + (t.accuracy != null ? " · " + pct(t.accuracy) + " match" : "") + "\n\n";
+      md += "Script: " + t.script + "\n\n";
+      if (t.said != null) md += "Said: " + (t.said || "(nothing heard)") + "\n";
+      if (t.missed.length) md += "\nMissed: " + t.missed.join(", ") + "\n";
+    });
+    zip.file("transcript.md", md);
+    zip.file("transcript.srt", srtFor(items));
+    zip.file("takes.csv", csvFor(items));
+    zip.file("markers.edl", edlFor(items, script.title));
+    zip.file("selects.csv", csvFor(selects));
+    zip.file("selects.edl", edlFor(selects, script.title + " selects"));
+    zip.file(audioFile, audio.blob, { compression: "STORE" });
+    if (full && mode !== "full") zip.file("audio/full-recording.wav", full.blob, { compression: "STORE" });
+    zip.file("README.txt", [
+      "Cueline session package: " + script.title,
+      "",
+      "session.json     Everything, for indexing: script, every take with its slate, mark, times, what was said, word timestamps and match score.",
+      "transcript.md    Readable transcript, one heading per take, slates written in.",
+      "transcript.srt   Captions on the full-recording timeline, each take starting with its slate.",
+      "takes.csv        One row per take.  selects.csv / selects.edl: good takes only.",
+      "markers.edl      Resolve timeline markers for every take (green good, red scratch, blue unmarked).",
+      "audio/           " + (full ? "full-recording.wav is the whole session. " : "") + (mode !== "full" ? audioFile.slice(6) + " holds only " + modeLabel + " with 1 s gaps; session.json maps it back." : ""),
+      "",
+      "Times are seconds from the start of the full recording.",
+      "To line up with camera footage in DaVinci Resolve: put full-recording.wav on a timeline at 01:00:00:00,",
+      "add the camera clips, select them all and use Auto Sync Audio > Based on Waveform. Then import markers.edl",
+      "(Timeline > Import > Timeline Markers from EDL).",
+    ].join("\n"));
+    const zipBlob = await zip.generateAsync({ type: "blob", compression: "DEFLATE" }, (m) => onProg(0.9 + m.percent / 1000, "Building the package… " + Math.round(m.percent) + "%"));
+    onProg(1, "Package ready.");
+    return { sid: meta.id, zipBlob, name: name + ".zip", flags, lines, items, transcribed: !!tx };
+  }
+
+  /* ---- wrap sheet UI ---- */
+  function openWrap(sid) {
+    closeSheets();
+    renderWrap(sid);
+    $("wrapSheet").hidden = false; showHud(true);
+  }
+  function renderWrap(sid) {
+    const sel = $("sessSel");
+    const list = sessionsFor(cur().id);
+    const keep = sid || sel.value;
+    sel.innerHTML = list.length ? list.map((m) => {
+      const label = new Date(m.created).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) +
+        " · " + dur(m.samples / SR) + " · " + sessTakes(m).length + " takes" + (m.state === "recording" ? " (recording)" : m.state === "interrupted" ? " (interrupted)" : "");
+      return '<option value="' + m.id + '"' + (m.id === keep ? " selected" : "") + (m.state === "recording" ? " disabled" : "") + ">" + esc(label) + "</option>";
+    }).join("") : '<option value="">No recordings for this script yet</option>';
+    const meta = store.sessions.find((m) => m.id === sel.value);
+    $("pkgBuild").disabled = !meta || building;
+    $("pkgDelete").disabled = !meta || building;
+    ["good", "clean", "full"].forEach((m) => {
+      $("am-" + m).checked = S.amode === m;
+      $("am-" + m + "-len").textContent = meta ? dur(rangesLength(rangesFor(meta, m))) + " of audio" : "";
+    });
+    $("incFull").checked = S.incFull !== false;
+    $("incFullRow").hidden = S.amode === "full";
+    $("doTx").checked = S.doTx !== false;
+    $("txFields").hidden = !$("doTx").checked;
+    $("aaiKey").value = keyStore.get();
+    $("aaiRegion").value = S.aaiRegion || "us";
+    $("aaiRelay").value = S.aaiRelay || "";
+    $("aaiLang").value = S.aaiLang || "en";
+    $("sessSum").textContent = meta ? (() => {
+      const ts = sessTakes(meta), lines = beatsOf(parse((store.scripts.find((s) => s.id === meta.scriptId) || {}).body || ""), S.split).length;
+      const got = new Set(ts.filter((t) => t.mark === "good").map((t) => t.beat)).size;
+      return ts.length + " takes · " + ts.filter((t) => t.mark === "good").length + " good · " + got + "/" + lines + " lines got";
+    })() : "Tap Record session in take mode to record your next shoot.";
+    $("pkgSave").hidden = !(pkg && meta && pkg.sid === meta.id);
+  }
+  function pkgProgress(f, msg) {
+    $("pkgProg").hidden = false; $("pkgBar").style.width = Math.round(f * 100) + "%"; $("pkgMsg").textContent = msg;
+  }
+  function renderReport(r) {
+    const box = $("pkgReport");
+    if (!r) { box.innerHTML = ""; return; }
+    const got = r.lines.filter((l) => l.goodTakes).length;
+    let html = '<div class="sumline"><b>' + got + "/" + r.lines.length + "</b> lines got · <b>" + r.items.filter((t) => t.mark === "good").length + "</b> selects" +
+      (r.transcribed ? " · transcribed" : " · not transcribed") + "</div>";
+    if (r.flags.length) html += '<ul class="flags">' + r.flags.slice(0, 14).map((f) => "<li><b>" + esc(f.slate) + "</b> " + esc(f.text) + "</li>").join("") + (r.flags.length > 14 ? "<li>… and " + (r.flags.length - 14) + " more in transcript.md</li>" : "") + "</ul>";
+    else html += '<p class="hint">Every line has a good take that matches the script.</p>';
+    box.innerHTML = html;
+  }
+  $("sessSel").addEventListener("change", () => { renderReport(null); $("pkgProg").hidden = true; renderWrap(); });
+  ["good", "clean", "full"].forEach((m) => $("am-" + m).addEventListener("change", () => { S.amode = m; save(); renderWrap(); }));
+  $("incFull").addEventListener("change", (e) => { S.incFull = e.target.checked; save(); });
+  $("doTx").addEventListener("change", (e) => { S.doTx = e.target.checked; save(); $("txFields").hidden = !e.target.checked; });
+  $("aaiKey").addEventListener("change", (e) => keyStore.set(e.target.value.trim()));
+  $("aaiRegion").addEventListener("change", (e) => { S.aaiRegion = e.target.value; save(); });
+  $("aaiRelay").addEventListener("change", (e) => { S.aaiRelay = e.target.value.trim(); save(); });
+  $("aaiLang").addEventListener("change", (e) => { S.aaiLang = e.target.value; save(); });
+  $("pkgBuild").addEventListener("click", async (e) => {
+    e.stopPropagation();
+    const meta = store.sessions.find((m) => m.id === $("sessSel").value);
+    if (!meta || building) return;
+    keyStore.set($("aaiKey").value.trim());
+    building = true; pkg = null; renderReport(null); renderWrap();
+    try {
+      const r = await buildPackage(meta, S.amode || "good", $("doTx").checked, $("incFull").checked, pkgProgress);
+      pkg = r; renderReport(r);
+      pkgProgress(1, "Package ready: " + (r.zipBlob.size / 1048576).toFixed(1) + " MB. Tap Save package.");
+    } catch (err) {
+      pkgProgress(0, err && err.message ? err.message : "Something went wrong building the package.");
+    } finally { building = false; renderWrap(); }
+  });
+  $("pkgSave").addEventListener("click", async (e) => {
+    e.stopPropagation();
+    if (!pkg) return;
+    try { await downloads.save({ filename: pkg.name, data: pkg.zipBlob }); pkgProgress(1, "Saved " + pkg.name + "."); }
+    catch (err) { pkgProgress(1, err && err.code === "declined" ? "Save cancelled. Tap Save package to try again." : "Couldn't save the file here."); }
+  });
+  (() => {
+    const b = $("pkgDelete"); let armed = 0;
+    b.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const meta = store.sessions.find((m) => m.id === $("sessSel").value);
+      if (!meta) return;
+      if (!armed) { b.classList.add("armed"); b.textContent = "Tap again to delete the audio"; armed = setTimeout(() => { armed = 0; b.classList.remove("armed"); b.textContent = "Delete recording"; }, 3000); return; }
+      clearTimeout(armed); armed = 0; b.classList.remove("armed"); b.textContent = "Delete recording";
+      await idbDelete(meta.id).catch(() => {});
+      store.sessions = store.sessions.filter((m) => m.id !== meta.id); save();
+      if (pkg && pkg.sid === meta.id) pkg = null;
+      renderReport(null); $("pkgProg").hidden = true; renderWrap();
+    });
+  })();
+  $("wrapFromLog").addEventListener("click", (e) => { e.stopPropagation(); openWrap(); });
+  if (!CAN_REC) { $("wrapFromLog").hidden = true; document.querySelectorAll("[data-app]").forEach((el) => { el.hidden = true; }); }
+  $("recBtn").addEventListener("click", async (e) => {
+    e.stopPropagation();
+    if (!recSess) { await startRecording(); P.focus({ preventScroll: true }); return; }
+    if (!recArm) { recArm = setTimeout(() => { recArm = 0; renderRec(); }, 3000); renderRec(); return; }
+    clearTimeout(recArm); recArm = 0;
+    const meta = await stopRecording();
+    if (meta) openWrap(meta.id);
+  });
+  renderRec();
+
+  /* ---- selects-only toggle in the take log ---- */
+  const selOnly = () => S.selectsOnly === true;
+  $("selOnly").addEventListener("change", (e) => { S.selectsOnly = e.target.checked; save(); });
+
+  /* ---- script links and QR codes ---- */
+  const b64url = (bytes) => { let s = ""; bytes.forEach((b) => { s += String.fromCharCode(b); }); return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); };
+  const unb64url = (str) => { const s = atob(str.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((str.length + 3) % 4)); return Uint8Array.from(s, (c) => c.charCodeAt(0)); };
+  async function packScript(s) {
+    const data = new TextEncoder().encode(JSON.stringify({ t: s.title, b: s.body }));
+    if (typeof CompressionStream === "undefined") throw errOf("compat", "This browser can't make script links.");
+    const buf = await new Response(new Blob([data]).stream().pipeThrough(new CompressionStream("deflate-raw"))).arrayBuffer();
+    return APP_URL + "#cue1=" + b64url(new Uint8Array(buf));
+  }
+  async function unpackScript(text) {
+    const m = String(text || "").match(/#cue1=([A-Za-z0-9_-]+)/);
+    if (!m) throw errOf("format", "That isn't a Cueline script link.");
+    if (typeof DecompressionStream === "undefined") throw errOf("compat", "This browser can't open script links. Update iPadOS.");
+    const out = await new Response(new Blob([unb64url(m[1])]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).text();
+    const j = JSON.parse(out);
+    if (typeof j.b !== "string") throw errOf("format", "That script link is damaged.");
+    return { title: String(j.t || "Imported script").slice(0, 120), body: j.b };
+  }
+  function addScript(sc) {
+    const same = store.scripts.find((s) => s.body === sc.body);
+    if (same) { store.current = same.id; save(); renderAll(); return "Already here: opened " + (same.title || "it") + "."; }
+    const s = { id: "s" + Date.now().toString(36), title: sc.title, body: sc.body, updated: Date.now() };
+    store.scripts.push(s); store.current = s.id; save(); renderAll();
+    return "Added " + s.title + ".";
+  }
+  let toastT = 0;
+  function toast(msg) { const t = $("toast"); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => { t.hidden = true; }, 3500); }
+  async function importFromText(text) {
+    try { toast(addScript(await unpackScript(text))); return true; }
+    catch (err) { toast(err.message || "Couldn't read that link."); return false; }
+  }
+  function importFromHash() {
+    if (!APP || !/#cue1=/.test(location.hash)) return;
+    const h = location.hash;
+    try { history.replaceState(null, "", location.pathname + location.search); } catch (e) {}
+    importFromText(h);
+  }
+  importFromHash();
+  window.addEventListener("hashchange", importFromHash);
+
+  // Send: show this script as a QR code and a link
+  const QR_URL = "https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js";
+  let sendLink = "";
+  $("sendBtn").addEventListener("click", async () => {
+    const m = $("sendModal"); m.hidden = false;
+    $("qrBox").innerHTML = '<p class="hint">Making the code…</p>'; $("sendMsg").textContent = "";
+    try {
+      sendLink = await packScript(cur());
+      const qrcode = await loadScript(QR_URL, "qrcode");
+      try {
+        const q = qrcode(0, "L"); q.addData(sendLink, "Byte"); q.make();
+        const n = q.getModuleCount(), cell = Math.max(2, Math.floor(560 / (n + 8)));
+        $("qrBox").innerHTML = q.createSvgTag({ cellSize: cell, margin: cell * 4, scalable: true });
+        $("sendMsg").textContent = "In Cueline on the iPad, tap Scan script and point it at this code.";
+      } catch (e) {
+        $("qrBox").innerHTML = '<p class="hint">This script is too long for one QR code. Copy the link and send it to the iPad instead.</p>';
+      }
+    } catch (err) { $("qrBox").innerHTML = '<p class="hint">' + esc(err.message || "Couldn't make the code.") + "</p>"; }
+  });
+  $("copyLink").addEventListener("click", () => {
+    if (!sendLink) return;
+    const done = () => { $("sendMsg").textContent = "Link copied. Paste it into Scan script › Paste a link on the iPad."; };
+    try { navigator.clipboard.writeText(sendLink).then(done, () => { $("sendMsg").textContent = sendLink; }); } catch (e) { $("sendMsg").textContent = sendLink; }
+  });
+
+  // Scan: read a QR code with the camera, or paste a link
+  const JSQR_URL = "https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js";
+  let scan = null;
+  async function openScan() {
+    $("scanModal").hidden = false; $("scanMsg").textContent = ""; $("pasteLink").value = "";
+    const camOk = APP && navigator.mediaDevices && navigator.mediaDevices.getUserMedia;
+    $("scanCam").hidden = !camOk;
+    if (!camOk) return;
+    try {
+      const jsQR = await loadScript(JSQR_URL, "jsQR");
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
+      const v = $("scanVideo"); v.srcObject = stream; await v.play();
+      const c = document.createElement("canvas"), g = c.getContext("2d", { willReadFrequently: true });
+      scan = { stream, raf: 0, busy: false, last: 0 };
+      $("scanMsg").textContent = "Point the camera at the code.";
+      const loop = (t) => {
+        if (!scan) return;
+        scan.raf = requestAnimationFrame(loop);
+        if (scan.busy || t - scan.last < 180 || v.readyState < 2) return;
+        scan.last = t;
+        const w = Math.min(1280, v.videoWidth), h = Math.round(v.videoHeight * (w / v.videoWidth));
+        if (!w || !h) return;
+        c.width = w; c.height = h; g.drawImage(v, 0, 0, w, h);
+        const hit = jsQR(g.getImageData(0, 0, w, h).data, w, h, { inversionAttempts: "dontInvert" });
+        if (hit && /#cue1=/.test(hit.data)) {
+          scan.busy = true;
+          importFromText(hit.data).then((ok) => { if (ok) closeScan(); else scan && (scan.busy = false); });
+        }
+      };
+      scan.raf = requestAnimationFrame(loop);
+    } catch (err) {
+      $("scanCam").hidden = true;
+      $("scanMsg").textContent = err && err.name === "NotAllowedError" ? "Camera blocked. Allow it in Settings, or paste a link below." : "The camera isn't available. Paste a link below instead.";
+    }
+  }
+  function closeScan() {
+    if (scan) { cancelAnimationFrame(scan.raf); scan.stream.getTracks().forEach((t) => t.stop()); scan = null; }
+    $("scanVideo").srcObject = null; $("scanModal").hidden = true;
+  }
+  $("scanBtn").addEventListener("click", openScan);
+  $("scanClose").addEventListener("click", closeScan);
+  $("sendClose").addEventListener("click", () => { $("sendModal").hidden = true; });
+  $("pasteGo").addEventListener("click", async () => { if (await importFromText($("pasteLink").value)) closeScan(); });
+  $("pasteLink").addEventListener("keydown", async (e) => { if (e.key === "Enter" && await importFromText($("pasteLink").value)) closeScan(); });
+
   /* ---------- HUD ---------- */
+  try { new ResizeObserver(() => { P.style.setProperty("--hud-h", hud.offsetHeight + "px"); }).observe(hud); } catch (e) {}
   let hideT = 0;
   function showHud(stay) {
     hud.classList.remove("away"); P.classList.remove("hide-cursor");
@@ -1083,11 +1888,11 @@ kbd {
   function scheduleHide() {
     clearTimeout(hideT);
     hideT = setTimeout(() => {
-      if ((playing || rec) && $("sheet").hidden && $("logSheet").hidden) { hud.classList.add("away"); P.classList.add("hide-cursor"); }
+      if ((playing || rec) && $("sheet").hidden && $("logSheet").hidden && $("wrapSheet").hidden) { hud.classList.add("away"); P.classList.add("hide-cursor"); }
     }, 2500);
   }
   function closeSheets() {
-    $("sheet").hidden = true; $("logSheet").hidden = true;
+    $("sheet").hidden = true; $("logSheet").hidden = true; $("wrapSheet").hidden = true;
     $("setBtn").classList.remove("on"); $("logBtn").classList.remove("on");
   }
 
@@ -1097,7 +1902,7 @@ kbd {
   function onKeyDown(e) {
     if (P.hidden) return;
     if (e.metaKey || e.ctrlKey || e.altKey) return;
-    if (e.target && e.target.tagName === "SELECT") return;
+    if (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
     const dot = $("keydot");
     dot.classList.add("hit"); setTimeout(() => dot.classList.remove("hit"), 60);
     $("keytest").innerHTML = "Last key: <b></b>";
@@ -1194,7 +1999,7 @@ kbd {
     P.focus({ preventScroll: true });
     if (!tap && takeMode() && Math.abs(total) > 40) { goBeat(bi + (total < 0 ? 1 : -1)); return; }
     if (tap) {
-      if (!$("sheet").hidden || !$("logSheet").hidden) { closeSheets(); return; }
+      if (!$("sheet").hidden || !$("logSheet").hidden || !$("wrapSheet").hidden) { closeSheets(); return; }
       if (hud.classList.contains("away")) showHud(); else if (playing || rec) { hud.classList.add("away"); }
     }
   });
@@ -1281,6 +2086,7 @@ kbd {
     $("mTakes").classList.toggle("on", takeMode());
     $("gScroll").hidden = takeMode();
     $("gTakes").hidden = !takeMode();
+    P.classList.toggle("takemode", takeMode());
   }
   const tog = (id, key) => $(id).addEventListener("click", (e) => { e.stopPropagation(); S[key] = !S[key]; save(); applyLayout(); P.focus({ preventScroll: true }); });
   tog("tMirror", "mirror"); tog("tFlip", "flip"); tog("tCount", "count"); tog("tAdvance", "advance");
@@ -1328,6 +2134,12 @@ kbd {
     last = 0; cancelAnimationFrame(raf); raf = requestAnimationFrame(tick);
   }
   function closePrompter() {
+    if (recSess) {
+      if (!takeMode()) setMode("takes");
+      setStatus("STOP THE SESSION RECORDING FIRST (TAP REC TWICE)", "note", 3500);
+      showHud(true);
+      return;
+    }
     cancelCountdown();
     if (rec) stopTake();
     playing = false;
