@@ -348,6 +348,7 @@ kbd {
         <tr><td><kbd>↓</kbd> <kbd>↑</kbd> wheel</td><td>Nudge one line.</td></tr>
         <tr><td><kbd>PgDn</kbd> <kbd>PgUp</kbd></td><td>Next / previous section.</td></tr>
         <tr><td><kbd>Home</kbd> <kbd>R</kbd></td><td>Back to the top.</td></tr>
+        <tr><td><kbd>[</kbd> <kbd>]</kbd></td><td>Text smaller / larger.</td></tr>
         <tr><td><kbd>M</kbd> <kbd>Esc</kbd></td><td>Mirror / leave.</td></tr>
       </table>
     </div>
@@ -470,6 +471,12 @@ kbd {
 
     <span class="keydot" id="keydot" title="Flashes when a key arrives"></span>
     <div class="spacer"></div>
+    <div class="grp" role="group" aria-label="Text size">
+      <button class="hb" id="textSmaller" type="button" aria-label="Smaller text">A−</button>
+      <div class="readout opt"><span>Text<b id="rSize">64</b></span></div>
+      <button class="hb" id="textBigger" type="button" aria-label="Larger text"><span style="font-size:1.2em">A+</span></button>
+    </div>
+    <button class="hb" id="mirrorBtn" type="button" aria-pressed="false">Mirror</button>
     <button class="hb" id="restartBtn" type="button" aria-label="Back to top"><svg viewBox="0 0 24 24"><path d="M4 4v6h6"/><path d="M4.5 10A8 8 0 1 1 6 16.5"/></svg></button>
     <button class="hb" id="setBtn" type="button" aria-label="Display settings"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></button>
     <button class="hb" id="exitBtn" type="button">Done</button>
@@ -1114,7 +1121,9 @@ kbd {
         case "PageUp": jumpCue(-1); break;
         case "Home": case "r": case "R": goBeat(0); break;
         case "End": goBeat(beats.length - 1); break;
-        case "m": case "M": S.mirror = !S.mirror; save(); applyLayout(); break;
+        case "m": case "M": toggleMirror(); break;
+        case "[": textSize(-4); break;
+        case "]": textSize(4); break;
         case "Escape": closePrompter(); break;
         default: handled = false;
       }
@@ -1131,7 +1140,9 @@ kbd {
         case "End": nudge = maxY - y; break;
         case "=": case "+": speed(speedStep()); break;
         case "-": case "_": speed(-speedStep()); break;
-        case "m": case "M": S.mirror = !S.mirror; save(); applyLayout(); break;
+        case "m": case "M": toggleMirror(); break;
+        case "[": textSize(-4); break;
+        case "]": textSize(4); break;
         case "Escape": closePrompter(); break;
         default: handled = false;
       }
@@ -1225,6 +1236,16 @@ kbd {
     build(); applyLayout(); idleStatus();
     if (m !== "takes") $("status").hidden = true;
   }
+  function textSize(delta) {
+    const keepFrac = maxY ? y / maxY : 0;
+    S.size = Math.max(28, Math.min(140, S.size + delta)); save();
+    applyLayout();
+    if (!takeMode()) { y = keepFrac * maxY; paint(); }
+  }
+  function toggleMirror() { S.mirror = !S.mirror; save(); applyLayout(); }
+  hb("textSmaller", () => textSize(-4));
+  hb("textBigger", () => textSize(4));
+  hb("mirrorBtn", toggleMirror);
   hb("mScroll", () => setMode("scroll"));
   hb("mTakes", () => setMode("takes"));
 
@@ -1249,6 +1270,9 @@ kbd {
     $("sLead").value = S.lead; $("oLead").textContent = Number(S.lead).toFixed(2);
     $("sEye").value = S.eye; $("oEye").textContent = S.eye + "%";
     $("tMirror").classList.toggle("on", S.mirror);
+    $("mirrorBtn").classList.toggle("on", S.mirror);
+    $("mirrorBtn").setAttribute("aria-pressed", String(S.mirror));
+    $("rSize").textContent = S.size;
     $("tFlip").classList.toggle("on", S.flip);
     $("tCount").classList.toggle("on", S.count);
     $("tAdvance").classList.toggle("on", S.advance);
