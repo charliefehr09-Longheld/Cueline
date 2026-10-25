@@ -6,6 +6,7 @@ A knob-driven teleprompter for iPad and laptop.
 - **Take mode:** one line at a time, knob press to start and stop takes, long press for good, double press for scratch, and a counter showing how many lines you've got.
 - **Marks only:** Cueline listens for each attempt. Press the knob once for good, twice for scratch, nothing before you speak. Takes are found from the audio, so you never start or stop anything mid-session. (Settings › Takes.)
 - **Filming queue:** tap + on scripts to queue them; Prompt rolls from one into the next on the knob, with one recording and one package for the whole day.
+- **Production audio:** plug a USB-C mic or receiver into the iPad and Cueline records it at its native rate, 24-bit, no processing, written to disk as it records. It's saved as its own WAV next to the package, on the same clock as the take log (Settings › Recording).
 - **Session recording:** records the audio of a whole shoot on the iPad. If iPadOS pauses the recording (screen lock, a call), the pause is filled with silence so the file stays in real time, and each pause is listed in the package. When you wrap, Cueline cuts out the good takes (or everything except scratch takes, or keeps the full recording), sends it to AssemblyAI, compares what you said with the script, and saves one package: `session.json` for indexing, a readable transcript with slates written in, captions, a CSV and DaVinci Resolve markers, plus selects-only versions.
 - **Send to iPad:** any script becomes a QR code or link. Tap **Scan script** in Cueline on the iPad to load it.
 
@@ -25,7 +26,7 @@ Some browsers refuse to send files straight to AssemblyAI. In that case deploy [
 
 ## Package format
 
-`session.json` is `cueline-session/2`: `scripts[]`, one take list with `scriptId` per take, `speechStart`/`speechEnd` (where the voice sat inside each take), `auto` (heard but never marked), and `session.gaps[]`. Times are seconds from the start of `audio/full-recording.wav`.
+`session.json` is `cueline-session/2`: `scripts[]`, one take list with `scriptId` per take, `speechStart`/`speechEnd` (where the voice sat inside each take), `auto` (heard but never marked), `session.gaps[]` and `productionAudio` (the separate full-quality WAV). Times are seconds from the start of `audio/full-recording.wav`.
 
 ## Script link format
 

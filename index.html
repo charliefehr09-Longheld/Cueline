@@ -292,6 +292,8 @@ kbd {
 .vu { width: 18px; height: 44px; margin: 0 2px; border: 1px solid var(--hud-line); border-radius: 7px; overflow: hidden; display: flex; align-items: flex-end; background: #14171b; box-sizing: border-box; }
 .vu i { display: block; width: 100%; height: 0; background: var(--good); transition: height 0.06s linear; }
 .vu.hot i { background: var(--ng); }
+.vu.clip { border-color: var(--ng); box-shadow: 0 0 0 2px rgba(255, 90, 82, 0.45); }
+.vu.clip i { background: var(--ng); height: 100% !important; }
 .keydot.hit { background: var(--eye); transition: none; }
 .progress { position: absolute; left: 0; right: 0; top: 0; height: 3px; }
 .progress i { display: block; height: 100%; background: var(--eye); width: 0; opacity: 0.7; }
@@ -448,6 +450,7 @@ kbd {
         <tr><td><kbd>L</kbd></td><td>Open the take log.</td></tr>
         <tr><td><kbd>F</kbd></td><td>Full screen script, nothing else on screen.</td></tr>
         <tr data-app><td>Rec</td><td>Records the whole session's audio for the wrap-up package: transcript, script check, selects.</td></tr>
+        <tr data-app><td>Production audio</td><td>Settings › Recording. Records your USB-C mic at full quality on the iPad, on the same clock as the take log. Saved as its own WAV.</td></tr>
         <tr data-app><td>Marks only</td><td>Settings › Takes: marks only. Cueline listens for each attempt. Press once for good, twice for scratch, nothing before you speak.</td></tr>
       </table>
     </div>
@@ -521,6 +524,14 @@ kbd {
       <button class="hb" id="tAdvance" type="button">Next line on good</button>
       <button class="hb" id="tCapture" type="button" data-app>Takes: press start and end</button>
     </div>
+    <h3 data-app>Recording</h3>
+    <div class="toggles" data-app>
+      <button class="hb" id="tProd" type="button">Production audio: off</button>
+    </div>
+    <label class="field" for="micSel" data-app>Microphone
+      <select id="micSel"><option value="">System default</option></select>
+    </label>
+    <p class="hint" data-app id="prodHint">Production audio records the plugged-in mic at its own rate, 24-bit, with no processing, and saves it as a separate WAV next to the package. About 520 MB an hour. Changes apply to the next recording.</p>
     <h3>Key test</h3>
     <div class="keytest" id="keytest">Press a key or turn your knob. The last key the page heard shows here.</div>
   </div>
@@ -564,6 +575,10 @@ kbd {
       <select id="sessSel"></select>
     </label>
     <div class="sumline" id="sessSum"></div>
+    <div class="btnrow" id="prodRow" hidden>
+      <button class="hb good" id="prodSave" type="button">Save production audio</button>
+      <span class="hint" id="prodMsg"></span>
+    </div>
     <h3>Audio to transcribe</h3>
     <div class="choices" role="radiogroup" aria-label="Audio to transcribe">
       <label class="choice" for="am-good"><input type="radio" name="amode" id="am-good"><span><b>Good takes only</b><small id="am-good-len"></small></span></label>
@@ -661,7 +676,7 @@ kbd {
 
   const DEFAULTS = {
     size: 64, width: 82, lead: 1.35, eye: 30, mirror: false, flip: false, count: true, speed: 70,
-    mode: "scroll", split: "para", advance: true, fps: "25", zero: "auto", amode: "good", selectsOnly: false, capture: "press"
+    mode: "scroll", split: "para", advance: true, fps: "25", zero: "auto", amode: "good", selectsOnly: false, capture: "press", prod: false, micId: ""
   };
 
   let store = load();
@@ -837,7 +852,7 @@ kbd {
     store.queue = store.queue.filter((id) => id !== gone);
     store.sessions.forEach((m) => { if (m.scriptIds) m.scriptIds = m.scriptIds.filter((id) => id !== gone); });
     const dead = store.sessions.filter((m) => (m.scriptIds ? !m.scriptIds.length : m.scriptId === gone));
-    dead.forEach((m) => idbDelete(m.id).catch(() => {}));
+    dead.forEach((m) => { idbDelete(m.id).catch(() => {}); prodDelete(m); });
     store.sessions = store.sessions.filter((m) => !dead.includes(m));
     store.scripts = store.scripts.filter((s) => s.id !== store.current);
     if (!store.scripts.length) store.scripts.push({ id: "s" + Date.now().toString(36), title: "New script", body: "", updated: Date.now() });
@@ -932,13 +947,17 @@ kbd {
       const tb = $("takeBtn");
       tb.hidden = marks;
       const vu = $("vu");
-      vu.hidden = !marks || !recSess;
+      const showVu = !!recSess && (marks || !!recSess.meta.production);
+      vu.hidden = !showVu;
+      if (showVu) {
+        const h = Math.min(100, Math.round(Math.sqrt(Math.min(1, VAD.level / 0.3)) * 100));
+        vu.firstElementChild.style.height = h + "%";
+        vu.classList.toggle("hot", VAD.speaking);
+        const clipping = performance.now() - recSess.clipAt < 600;
+        vu.classList.toggle("clip", clipping);
+        if (clipping && !statusT) setStatus("CLIPPING  ·  TURN THE RECEIVER DOWN", "rec", 1500);
+      }
       if (marks) {
-        if (recSess) {
-          const h = Math.min(100, Math.round(Math.sqrt(Math.min(1, VAD.level / 0.3)) * 100));
-          vu.firstElementChild.style.height = h + "%";
-          vu.classList.toggle("hot", VAD.speaking);
-        }
         P.classList.toggle("recording", !!recSess && VAD.speaking);
         if (recSess && VAD.speaking && VAD.open && !statusT)
           setStatus("● L" + (beats[bi] ? beats[bi].n : "") + "  ·  " + fmt(Math.max(0, (recPos() || 0) - VAD.open.voiceStart)), "rec");
@@ -1111,8 +1130,8 @@ kbd {
       const segs = VAD.segs.concat(VAD.open ? [{ voiceStart: VAD.open.voiceStart, voiceEnd: VAD.open.lastVoice }] : [])
         .filter((g) => g.voiceEnd > rec.rs - 0.3 && g.voiceStart < rec.re + 0.3);
       if (segs.length) {
-        rec.vs = Math.max(rec.rs, Math.min(...segs.map((g) => g.voiceStart)));
-        rec.ve = Math.min(rec.re, Math.max(...segs.map((g) => g.voiceEnd)));
+        rec.vs = +Math.max(rec.rs, Math.min(...segs.map((g) => g.voiceStart))).toFixed(3);
+        rec.ve = +Math.min(rec.re, Math.max(...segs.map((g) => g.voiceEnd))).toFixed(3);
       }
     }
     const i = beats.findIndex((b) => b.n === rec.beat);
@@ -1417,10 +1436,136 @@ kbd {
   }
 
   /* ---- capture ---- */
-  const WORKLET = "class C extends AudioWorkletProcessor{constructor(){super();this.r=sampleRate/16000;this.ph=0;this.s=0;this.c=0;this.b=new Int16Array(800);this.n=0;this.port.onmessage=e=>{if(e.data==='flush'){this.post(true);}};}" +
-    "post(f){if(this.n===0){if(f)this.port.postMessage({pcm:new ArrayBuffer(0),flushed:true});return;}const o=this.b.slice(0,this.n);this.port.postMessage({pcm:o.buffer,flushed:!!f},[o.buffer]);this.n=0;}" +
-    "process(inputs){const ch=inputs[0]&&inputs[0][0];if(!ch)return true;for(let i=0;i<ch.length;i++){this.s+=ch[i];this.c++;this.ph+=1;if(this.ph>=this.r){this.ph-=this.r;let v=this.s/this.c;this.s=0;this.c=0;v=v>1?1:v<-1?-1:v;this.b[this.n++]=v<0?v*32768:v*32767;if(this.n===this.b.length)this.post(false);}}return true;}}" +
-    "registerProcessor('cueline-cap',C);";
+  const WORKLET = `class C extends AudioWorkletProcessor {
+    constructor(o) {
+      super();
+      const p = (o && o.processorOptions) || {};
+      this.hq = !!p.hq; this.ch = 1;
+      this.r = sampleRate / 16000; this.ph = 0; this.s = 0; this.c = 0;
+      this.b = new Int16Array(800); this.n = 0;
+      this.raw = this.hq ? new Uint8Array(Math.ceil(sampleRate * 0.12) * 6) : null; this.rn = 0; this.peak = 0;
+      this.port.onmessage = (e) => { if (e.data === 'flush') this.post(true); };
+    }
+    post(f) {
+      const msg = { flushed: !!f, peak: this.peak, ch: this.ch, rate: sampleRate, pcm: new ArrayBuffer(0) };
+      const tr = [];
+      if (this.n) { const o = this.b.slice(0, this.n); msg.pcm = o.buffer; tr.push(o.buffer); this.n = 0; }
+      if (this.hq && this.rn) { const o = this.raw.slice(0, this.rn); msg.hq = o.buffer; tr.push(o.buffer); this.rn = 0; }
+      this.peak = 0;
+      this.port.postMessage(msg, tr);
+    }
+    w24(v) {
+      v = v > 1 ? 1 : v < -1 ? -1 : v;
+      let x = Math.round(v < 0 ? v * 8388608 : v * 8388607); if (x < 0) x += 16777216;
+      this.raw[this.rn++] = x & 255; this.raw[this.rn++] = (x >> 8) & 255; this.raw[this.rn++] = (x >> 16) & 255;
+    }
+    process(inputs) {
+      const inp = inputs[0]; if (!inp || !inp.length || !inp[0]) return true;
+      const ch = Math.min(2, inp.length); this.ch = ch;
+      const L = inp[0], R = ch > 1 ? inp[1] : null, len = L.length;
+      for (let i = 0; i < len; i++) {
+        const l = L[i], rr = R ? R[i] : l;
+        this.s += (l + rr) * 0.5; this.c++; this.ph += 1;
+        if (this.ph >= this.r) {
+          this.ph -= this.r; let v = this.s / this.c; this.s = 0; this.c = 0;
+          v = v > 1 ? 1 : v < -1 ? -1 : v; this.b[this.n++] = v < 0 ? v * 32768 : v * 32767;
+          if (this.n === this.b.length) this.post(false);
+        }
+        if (this.hq) {
+          const al = l < 0 ? -l : l, ar = rr < 0 ? -rr : rr;
+          if (al > this.peak) this.peak = al; if (ar > this.peak) this.peak = ar;
+          this.w24(l); if (R) this.w24(rr);
+          if (this.rn + 6 > this.raw.length) this.post(false);
+        }
+      }
+      return true;
+    }
+  }
+  registerProcessor('cueline-cap', C);`;
+
+  /* Production audio is written straight to disk (origin private file system) by a worker, so a crash keeps everything up to the last second. */
+  const WRITER = `let h = null, off = 44, rate = 48000, ch = 1, flushed = 0;
+  function header(bytes) {
+    const b = new ArrayBuffer(44), v = new DataView(b);
+    const w = (o, t) => { for (let i = 0; i < t.length; i++) v.setUint8(o + i, t.charCodeAt(i)); };
+    w(0, 'RIFF'); v.setUint32(4, 36 + bytes, true); w(8, 'WAVE'); w(12, 'fmt ');
+    v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, ch, true); v.setUint32(24, rate, true);
+    v.setUint32(28, rate * ch * 3, true); v.setUint16(32, ch * 3, true); v.setUint16(34, 24, true); w(36, 'data'); v.setUint32(40, bytes, true);
+    return b;
+  }
+  self.onmessage = async (e) => {
+    const d = e.data;
+    try {
+      if (d.cmd === 'open') {
+        const root = await navigator.storage.getDirectory();
+        const fh = await root.getFileHandle(d.name, { create: true });
+        h = await fh.createSyncAccessHandle();
+        rate = d.rate; ch = d.ch;
+        h.truncate(0); h.write(new Uint8Array(header(0)), { at: 0 }); off = 44; flushed = 44; h.flush();
+        postMessage({ ok: true });
+      } else if (d.cmd === 'data') {
+        if (!h) return;
+        h.write(new Uint8Array(d.buf), { at: off }); off += d.buf.byteLength;
+        if (off - flushed > 1500000) { h.flush(); flushed = off; }
+      } else if (d.cmd === 'close') {
+        if (h) { h.write(new Uint8Array(header(off - 44)), { at: 0 }); h.flush(); h.close(); h = null; }
+        postMessage({ closed: true, bytes: off - 44 });
+      } else if (d.cmd === 'repair') {
+        const root = await navigator.storage.getDirectory();
+        const fh = await root.getFileHandle(d.name);
+        const ah = await fh.createSyncAccessHandle();
+        const size = ah.getSize(); rate = d.rate; ch = d.ch;
+        if (size > 44) ah.write(new Uint8Array(header(size - 44)), { at: 0 });
+        ah.flush(); ah.close();
+        postMessage({ repaired: true, bytes: Math.max(0, size - 44) });
+      }
+    } catch (err) { postMessage({ ok: false, error: String((err && err.message) || err) }); }
+  };`;
+  const CAN_PROD = CAN_REC && !!(navigator.storage && navigator.storage.getDirectory) && typeof Worker !== "undefined";
+  const prodBytesPerSec = (p) => p.sampleRate * p.channels * 3;
+  function spawnWriter() {
+    const url = URL.createObjectURL(new Blob([WRITER], { type: "text/javascript" }));
+    return new Worker(url);
+  }
+  function writerCall(w, msg, transfer) {
+    return new Promise((res, rej) => {
+      const t = setTimeout(() => rej(new Error("no answer from the audio writer")), 8000);
+      w.onmessage = (e) => { clearTimeout(t); if (e.data && e.data.ok === false) rej(new Error(e.data.error || "writer failed")); else res(e.data); };
+      w.postMessage(msg, transfer || []);
+    });
+  }
+  async function prodFile(meta) {
+    const p = meta.production;
+    if (!p) return null;
+    const root = await navigator.storage.getDirectory();
+    const fh = await root.getFileHandle(p.file);
+    let f = await fh.getFile();
+    if (f.size > 44) {
+      const v = new DataView(await f.slice(40, 44).arrayBuffer());
+      if (v.getUint32(0, true) !== f.size - 44) {      // header never finished (crash): fix it in place
+        const w = spawnWriter();
+        try { await writerCall(w, { cmd: "repair", name: p.file, rate: p.sampleRate, ch: p.channels }); } finally { w.terminate(); }
+        f = await fh.getFile();
+      }
+    }
+    return f;
+  }
+  async function prodDelete(meta) {
+    if (!meta.production) return;
+    try { const root = await navigator.storage.getDirectory(); await root.removeEntry(meta.production.file); } catch (e) {}
+  }
+  async function refreshMics() {
+    const sel = $("micSel");
+    if (!CAN_REC || !navigator.mediaDevices.enumerateDevices) return;
+    try {
+      const devs = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "audioinput");
+      const keep = S.micId || "";
+      sel.innerHTML = '<option value="">System default</option>' + devs.map((d, i) => '<option value="' + esc(d.deviceId) + '">' + esc(d.label || "Microphone " + (i + 1)) + "</option>").join("");
+      sel.value = devs.some((d) => d.deviceId === keep) ? keep : "";
+    } catch (e) {}
+  }
+  if (CAN_REC && navigator.mediaDevices.addEventListener) navigator.mediaDevices.addEventListener("devicechange", refreshMics);
+
   let recSess = null;
   const recPos = () => recSess ? (recSess.samples + Math.min(0.2, (performance.now() - recSess.lastPostAt) / 1000) * SR) / SR : null;
   const marksMode = () => S.capture === "marks" && CAN_REC;
@@ -1495,24 +1640,51 @@ kbd {
 
   async function startRecording() {
     if (recSess || !CAN_REC) return;
-    let stream, ctx;
+    let stream, ctx, writer = null;
+    const hq = !!S.prod && CAN_PROD;
+    const audio = hq
+      ? { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+      : { echoCancellation: false, noiseSuppression: true, autoGainControl: true, channelCount: 1 };
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: true, autoGainControl: true, channelCount: 1 } });
+      try { stream = await navigator.mediaDevices.getUserMedia({ audio: S.micId ? { ...audio, deviceId: { exact: S.micId } } : audio }); }
+      catch (first) {
+        if (!S.micId) throw first;
+        stream = await navigator.mediaDevices.getUserMedia({ audio });   // the chosen mic is gone: fall back to the default
+        setStatus("CHOSEN MIC NOT FOUND · USING THE DEFAULT", "note", 3000);
+      }
     } catch (err) { setStatus("MICROPHONE BLOCKED · ALLOW IT IN SETTINGS", "note", 4000); return; }
+    refreshMics();
+    const track = stream.getAudioTracks()[0];
+    const micLabel = (track && track.label) || "microphone";
     try {
       ctx = new (window.AudioContext || window.webkitAudioContext)();
       const url = URL.createObjectURL(new Blob([WORKLET], { type: "text/javascript" }));
       await ctx.audioWorklet.addModule(url);
-      const node = new AudioWorkletNode(ctx, "cueline-cap");
+      const src = ctx.createMediaStreamSource(stream);
+      const channels = hq ? Math.max(1, Math.min(2, src.channelCount || 1)) : 1;
+      const meta = { id: "r" + Date.now().toString(36), scriptId: cur().id, scriptIds: [cur().id], title: cur().title, created: Date.now(), samples: 0, chunks: 0, state: "recording", gaps: [], capture: S.capture || "press", mic: micLabel };
+      if (hq) {
+        writer = spawnWriter();
+        try {
+          await writerCall(writer, { cmd: "open", name: meta.id + "-production.wav", rate: ctx.sampleRate, ch: channels });
+          meta.production = { file: meta.id + "-production.wav", sampleRate: ctx.sampleRate, channels, bitDepth: 24, bytes: 0 };
+        } catch (err) {
+          writer.terminate(); writer = null;
+          setStatus("PRODUCTION AUDIO UNAVAILABLE · RECORDING THE WORKING COPY ONLY", "note", 4000);
+        }
+      }
+      const node = new AudioWorkletNode(ctx, "cueline-cap", { processorOptions: { hq: !!meta.production } });
       const mute = ctx.createGain(); mute.gain.value = 0;
-      ctx.createMediaStreamSource(stream).connect(node); node.connect(mute); mute.connect(ctx.destination);
+      src.connect(node); node.connect(mute); mute.connect(ctx.destination);
       await ctx.resume();
-      const meta = { id: "r" + Date.now().toString(36), scriptId: cur().id, scriptIds: [cur().id], title: cur().title, created: Date.now(), samples: 0, chunks: 0, state: "recording", gaps: [], capture: S.capture || "press" };
       store.sessions.push(meta); save();
-      const sess = { meta, ctx, stream, node, pending: [], pendingSamples: 0, samples: 0, lastPostAt: performance.now(), ctx0: ctx.currentTime, wall0: performance.now(), driftRef: null, flushing: Promise.resolve(), onFlushed: null };
+      const sess = { meta, ctx, stream, node, writer, pending: [], pendingSamples: 0, samples: 0, lastPostAt: performance.now(), ctx0: ctx.currentTime, wall0: performance.now(), driftRef: null, flushing: Promise.resolve(), onFlushed: null, peak: 0, clipAt: 0, hqBytes: 0 };
       vadReset();
+      if (track) track.onended = () => { if (recSess === sess) { setStatus("MICROPHONE DISCONNECTED · RECORDING STOPPED", "note", 6000); stopRecording().then((m) => { if (m) openWrap(m.id); }); } };
       node.port.onmessage = (e) => {
         const pcm = new Int16Array(e.data.pcm);
+        if (e.data.peak > sess.peak) sess.peak = e.data.peak;
+        if (e.data.peak >= 0.985) sess.clipAt = performance.now();
         if (pcm.length) {
           // a pause in the audio clock (screen lock, app switch, a call) becomes silence, so the file stays in real time
           const drift = (performance.now() - sess.wall0) / 1000 - (ctx.currentTime - sess.ctx0);
@@ -1522,6 +1694,10 @@ kbd {
             const fill = new Int16Array(Math.round(jump * SR));
             sess.meta.gaps.push({ at: +(sess.samples / SR).toFixed(3), seconds: +jump.toFixed(3) });
             sess.pending.push(fill); sess.pendingSamples += fill.length; sess.samples += fill.length;
+            if (sess.writer && sess.meta.production) {
+              const z = new Uint8Array(Math.round(jump * sess.meta.production.sampleRate) * sess.meta.production.channels * 3);
+              sess.hqBytes += z.byteLength; sess.writer.postMessage({ cmd: "data", buf: z.buffer }, [z.buffer]);
+            }
             sess.driftRef = drift;
             if (VAD.open) closeAttempt();
             save();
@@ -1532,13 +1708,16 @@ kbd {
           vadFrame(pcm, at);
           if (sess.pendingSamples >= SR * 5) flushChunks(sess);
         }
+        if (e.data.hq && e.data.hq.byteLength && sess.writer) { sess.hqBytes += e.data.hq.byteLength; sess.writer.postMessage({ cmd: "data", buf: e.data.hq }, [e.data.hq]); }
         if (e.data.flushed && sess.onFlushed) sess.onFlushed();
       };
       recSess = sess;
-      setStatus(marksMode() ? "● RECORDING  ·  LISTENING FOR TAKES" : "● RECORDING SESSION", "rec", 1400);
+      const what = meta.production ? "  ·  " + micLabel.toUpperCase().slice(0, 28) + "  ·  " + Math.round(meta.production.sampleRate / 1000) + "K 24-BIT" : "";
+      setStatus((marksMode() ? "● RECORDING  ·  LISTENING FOR TAKES" : "● RECORDING SESSION") + what, "rec", 2600);
     } catch (err) {
       stream.getTracks().forEach((t) => t.stop());
       try { ctx && ctx.close(); } catch (e) {}
+      if (writer) writer.terminate();
       setStatus("RECORDING ISN'T AVAILABLE HERE", "note", 3000);
     }
     renderRec();
@@ -1552,8 +1731,15 @@ kbd {
     await new Promise((res) => { const t = setTimeout(res, 500); sess.onFlushed = () => { clearTimeout(t); res(); }; sess.node.port.postMessage("flush"); });
     recSess = null;
     await flushChunks(sess);
-    sess.stream.getTracks().forEach((t) => t.stop());
+    sess.stream.getTracks().forEach((t) => { t.onended = null; t.stop(); });
     try { await sess.ctx.close(); } catch (e) {}
+    if (sess.writer) {
+      try {
+        const r = await writerCall(sess.writer, { cmd: "close" });
+        if (sess.meta.production) sess.meta.production.bytes = r.bytes || sess.hqBytes;
+      } catch (e) { if (sess.meta.production) sess.meta.production.bytes = sess.hqBytes; }
+      sess.writer.terminate();
+    }
     sess.meta.state = "done"; save();
     vadReset();
     renderRec(); idleStatus();
@@ -1875,6 +2061,11 @@ kbd {
         transcribedAudio: { file: audioFile, contents: modeLabel, durationSeconds: +audio.seconds.toFixed(3),
           segments: audio.segs.map((g) => ({ slate: g.take ? (items.find((t) => t.takeId === g.take.id) || {}).label || null : null, recordingStart: +g.src.toFixed(3), fileStart: +g.out.toFixed(3), duration: +g.len.toFixed(3) })) },
       },
+      productionAudio: meta.production ? {
+        file: name + "-production.wav", savedSeparately: true, sampleRate: meta.production.sampleRate, channels: meta.production.channels, bitDepth: 24,
+        durationSeconds: +((meta.production.bytes || 0) / prodBytesPerSec(meta.production)).toFixed(3) || +(total / SR).toFixed(3),
+        microphone: meta.mic || null, note: "Same clock as full-recording.wav: sample 0 of both is t = 0. Pauses were filled with silence in both.",
+      } : null,
       transcription: tx ? { provider: "AssemblyAI", id: tx.id, language: tx.language_code || null, audio: modeLabel } : null,
       summary: { scripts: scripts.length, lines: lines.length, linesWithGoodTake: lines.filter((l) => l.goodTakes).length, takes: items.length, goodTakes: selects.length, flags },
       lines, takes: items, betweenTakes: loose,
@@ -1912,7 +2103,8 @@ kbd {
       "transcript.srt   Captions on the full-recording timeline, each take starting with its slate.",
       "takes.csv        One row per take.  selects.csv / selects.edl: good takes only.",
       "markers.edl      Resolve timeline markers for every take (green good, red scratch, blue unmarked).",
-      "audio/           " + (full ? "full-recording.wav is the whole session. " : "") + (mode !== "full" ? audioFile.slice(6) + " holds only " + modeLabel + " with 1 s gaps; session.json maps it back." : ""),
+      "audio/           " + (full ? "full-recording.wav is the whole session (16 kHz working copy). " : "") + (mode !== "full" ? audioFile.slice(6) + " holds only " + modeLabel + " with 1 s gaps; session.json maps it back." : ""),
+      meta.production ? name + "-production.wav  Saved next to this zip: the production audio (" + Math.round(meta.production.sampleRate / 1000) + " kHz, 24-bit) on the same clock. Use this for the edit." : "",
       "",
       "Times are seconds from the start of the full recording. If the iPad paused the recording (screen lock, a call),",
       "that pause was filled with silence so the file stays in real time; session.json lists each pause under gaps.",
@@ -1961,7 +2153,28 @@ kbd {
       return ts.length + " takes · " + ts.filter((t) => t.mark === "good").length + " good · " + got + "/" + lines + " lines got";
     })() : "Tap Record session in take mode to record your next shoot.";
     $("pkgSave").hidden = !(pkg && meta && pkg.sid === meta.id);
+    const prod = meta && meta.production;
+    $("prodRow").hidden = !prod;
+    if (prod) {
+      const secs = prod.bytes ? prod.bytes / prodBytesPerSec(prod) : meta.samples / SR;
+      $("prodMsg").textContent = dur(secs) + " · " + Math.round(prod.sampleRate / 1000) + " kHz · 24-bit · " + (prod.channels === 2 ? "stereo" : "mono") + " · " + ((prod.bytes || secs * prodBytesPerSec(prod)) / 1048576).toFixed(0) + " MB" + (meta.mic ? " · " + meta.mic : "");
+    }
   }
+  $("prodSave").addEventListener("click", async (e) => {
+    e.stopPropagation();
+    const meta = store.sessions.find((m) => m.id === $("sessSel").value);
+    if (!meta || !meta.production) return;
+    const stem = (pkg && pkg.sid === meta.id) ? pkg.name.replace(/\.zip$/, "") : "cueline-" + safeName(meta.title) + "-" + new Date(meta.created).toISOString().slice(0, 16).replace(/[:T]/g, "-");
+    $("prodMsg").textContent = "Preparing the file…";
+    try {
+      const f = await prodFile(meta);
+      if (!f || f.size <= 44) { $("prodMsg").textContent = "The production file is empty."; return; }
+      await downloads.save({ filename: stem + "-production.wav", data: f });
+      $("prodMsg").textContent = "Saved " + stem + "-production.wav (" + (f.size / 1048576).toFixed(0) + " MB).";
+    } catch (err) {
+      $("prodMsg").textContent = err && err.code === "declined" ? "Save cancelled." : "Couldn't save the production audio: " + ((err && err.message) || "unknown error");
+    }
+  });
   function pkgProgress(f, msg) {
     $("pkgProg").hidden = false; $("pkgBar").style.width = Math.round(f * 100) + "%"; $("pkgMsg").textContent = msg;
   }
@@ -2012,6 +2225,7 @@ kbd {
       if (!armed) { b.classList.add("armed"); b.textContent = "Tap again to delete the audio"; armed = setTimeout(() => { armed = 0; b.classList.remove("armed"); b.textContent = "Delete recording"; }, 3000); return; }
       clearTimeout(armed); armed = 0; b.classList.remove("armed"); b.textContent = "Delete recording";
       await idbDelete(meta.id).catch(() => {});
+      await prodDelete(meta);
       store.sessions = store.sessions.filter((m) => m.id !== meta.id); save();
       if (pkg && pkg.sid === meta.id) pkg = null;
       renderReport(null); $("pkgProg").hidden = true; renderWrap();
@@ -2305,6 +2519,7 @@ kbd {
     const open = $("sheet").hidden;
     closeSheets();
     $("sheet").hidden = !open; $("setBtn").classList.toggle("on", open);
+    if (open) refreshMics();
   });
   function toggleLog() {
     const open = $("logSheet").hidden;
@@ -2366,6 +2581,8 @@ kbd {
     $("tCount").classList.toggle("on", S.count);
     $("tAdvance").classList.toggle("on", S.advance);
     $("tCapture").textContent = "Takes: " + (S.capture === "marks" ? "marks only (listens)" : "press start and end");
+    $("tProd").textContent = "Production audio: " + (S.prod && CAN_PROD ? "on" : "off");
+    $("tProd").classList.toggle("on", !!S.prod && CAN_PROD);
     $("tCapture").classList.toggle("on", S.capture === "marks");
     $("tSplit").textContent = "Split: " + (S.split === "line" ? "each line" : "paragraphs");
     $("mScroll").classList.toggle("on", !takeMode());
@@ -2386,6 +2603,14 @@ kbd {
     }
   }
   $("tCapture").addEventListener("click", (e) => { e.stopPropagation(); setCapture(S.capture === "marks" ? "press" : "marks"); P.focus({ preventScroll: true }); });
+  if (!CAN_PROD) { $("tProd").hidden = true; $("prodHint").textContent = "Production audio needs the home-screen app on a current iPadOS."; }
+  $("tProd").addEventListener("click", (e) => {
+    e.stopPropagation();
+    S.prod = !S.prod; save(); syncControls();
+    if (recSess) setStatus("APPLIES TO THE NEXT RECORDING", "note", 2000);
+    P.focus({ preventScroll: true });
+  });
+  $("micSel").addEventListener("change", (e) => { S.micId = e.target.value; save(); if (recSess) setStatus("APPLIES TO THE NEXT RECORDING", "note", 2000); });
   $("tSplit").addEventListener("click", (e) => {
     e.stopPropagation();
     if (rec) stopTake();

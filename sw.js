@@ -1,4 +1,4 @@
-const CACHE = "cueline-v6";
+const CACHE = "cueline-v7";
 const CORE = ["./", "index.html", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png"];
 const LIBS = [
   "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js",
