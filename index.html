@@ -1335,6 +1335,17 @@ kbd {
         setTimeout(() => URL.revokeObjectURL(url), 4000);
         return { status: "saved" };
       } catch (err) { throw fail("unavailable"); }
+    },
+    async saveMany(items) {
+      const typeOf = (n) => ({ csv: "text/csv", zip: "application/zip", wav: "audio/wav", json: "application/json" }[n.split(".").pop().toLowerCase()] || "text/plain");
+      const files = items.map((it) => new File([it.data], it.filename, { type: typeOf(it.filename) }));
+      const touch = navigator.maxTouchPoints > 1;
+      if (touch && navigator.canShare && navigator.canShare({ files })) {
+        try { await navigator.share({ files, title: files[0].name }); return { status: "saved" }; }
+        catch (err) { if (err && err.name === "AbortError") throw fail("declined"); }
+      }
+      for (const it of items) { await this.save(it); await new Promise((r) => setTimeout(r, 400)); }
+      return { status: "saved" };
     }
   };
   function syncExport() {
@@ -2213,7 +2224,20 @@ kbd {
   $("pkgSave").addEventListener("click", async (e) => {
     e.stopPropagation();
     if (!pkg) return;
-    try { await downloads.save({ filename: pkg.name, data: pkg.zipBlob }); pkgProgress(1, "Saved " + pkg.name + "."); }
+    const meta = store.sessions.find((m) => m.id === pkg.sid);
+    try {
+      if (meta && meta.production && downloads.saveMany) {
+        const stem = pkg.name.replace(/\.zip$/, "");
+        pkgProgress(1, "Preparing the package and the production audio…");
+        const f = await prodFile(meta);
+        if (f && f.size > 44) {
+          await downloads.saveMany([{ filename: pkg.name, data: pkg.zipBlob }, { filename: stem + "-production.wav", data: f }]);
+          pkgProgress(1, "Saved " + pkg.name + " and " + stem + "-production.wav together.");
+          return;
+        }
+      }
+      await downloads.save({ filename: pkg.name, data: pkg.zipBlob }); pkgProgress(1, "Saved " + pkg.name + ".");
+    }
     catch (err) { pkgProgress(1, err && err.code === "declined" ? "Save cancelled. Tap Save package to try again." : "Couldn't save the file here."); }
   });
   (() => {
