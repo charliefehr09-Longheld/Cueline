@@ -114,6 +114,21 @@ button { cursor: pointer; }
 .item.active { background: var(--surface); box-shadow: inset 3px 0 0 var(--accent); }
 .item .t { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .item .m { font-family: var(--font-mono); font-size: 0.72rem; color: var(--muted); }
+.item { position: relative; padding-right: 46px; cursor: pointer; }
+.qbtn {
+  position: absolute; right: 8px; top: 50%; transform: translateY(-50%); width: 28px; height: 28px; border-radius: 50%;
+  border: 1px solid var(--line); background: var(--bg); color: var(--muted); font-family: var(--font-mono); font-size: 0.75rem;
+  display: grid; place-items: center; padding: 0;
+}
+.qbtn:hover { border-color: var(--accent); color: var(--accent); }
+.qbtn.on { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+.queue {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 8px 10px 8px 16px; font-size: 0.92rem;
+}
+.queue .ql { font-family: var(--font-mono); font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.queue .qs { flex: 1; min-width: 160px; }
+.queue .qs i { font-style: normal; color: var(--muted); padding: 0 6px; }
 
 .edit {
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--r);
@@ -227,6 +242,7 @@ kbd {
 .status.rec { color: #fff; background: var(--ng); }
 .status.good { color: #04140a; background: var(--good); }
 .status.note { color: #1A1200; background: var(--eye); }
+.status.listen { color: var(--good); background: rgba(87, 208, 138, 0.14); }
 
 .countdown {
   position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none;
@@ -273,6 +289,9 @@ kbd {
 .readout b { display: block; color: var(--hud-fg); font-size: 1.02rem; font-weight: 500; }
 .spacer { flex: 1; }
 .keydot { width: 8px; height: 8px; border-radius: 50%; background: #3a4048; transition: background 0.3s; }
+.vu { width: 18px; height: 44px; margin: 0 2px; border: 1px solid var(--hud-line); border-radius: 7px; overflow: hidden; display: flex; align-items: flex-end; background: #14171b; box-sizing: border-box; }
+.vu i { display: block; width: 100%; height: 0; background: var(--good); transition: height 0.06s linear; }
+.vu.hot i { background: var(--ng); }
 .keydot.hit { background: var(--eye); transition: none; }
 .progress { position: absolute; left: 0; right: 0; top: 0; height: 3px; }
 .progress i { display: block; height: 100%; background: var(--eye); width: 0; opacity: 0.7; }
@@ -384,6 +403,12 @@ kbd {
     <button class="btn primary" id="promptBtn" type="button">▶ Prompt</button>
   </div>
 
+  <div class="queue" id="queueBar" hidden>
+    <span class="ql">Filming queue</span>
+    <span class="qs" id="queueText"></span>
+    <button class="btn ghost" id="queueClear" type="button">Clear</button>
+  </div>
+
   <div class="workspace">
     <nav class="list" id="list" aria-label="Scripts"></nav>
     <section class="edit">
@@ -422,7 +447,8 @@ kbd {
         <tr><td><kbd>S</kbd></td><td>Slate: white flash plus a sync point in the log.</td></tr>
         <tr><td><kbd>L</kbd></td><td>Open the take log.</td></tr>
         <tr><td><kbd>F</kbd></td><td>Full screen script, nothing else on screen.</td></tr>
-        <tr data-app><td>Record session</td><td>Records audio for the wrap-up package: transcript, script check, selects.</td></tr>
+        <tr data-app><td>Rec</td><td>Records the whole session's audio for the wrap-up package: transcript, script check, selects.</td></tr>
+        <tr data-app><td>Marks only</td><td>Settings › Takes: marks only. Cueline listens for each attempt. Press once for good, twice for scratch, nothing before you speak.</td></tr>
       </table>
     </div>
     <div class="panel syntax">
@@ -431,6 +457,7 @@ kbd {
         <li><code># Hook</code> on its own line marks a section. Sections show as amber cue labels and are jump targets.</li>
         <li><code>[beat]</code> or <code>[smile]</code> shows as a dim italic direction.</li>
         <li>A blank line starts a new paragraph. In take mode each paragraph is one line to shoot, or each line if you choose.</li>
+        <li>Tap <code>+</code> on a script to add it to the filming queue. Prompt then rolls through the queue in order, one recording for the whole day.</li>
         <li>Scripts and take logs are kept in this browser on this device.</li>
       </ul>
     </div>
@@ -492,6 +519,7 @@ kbd {
     <div class="toggles">
       <button class="hb" id="tSplit" type="button">Split: paragraphs</button>
       <button class="hb" id="tAdvance" type="button">Next line on good</button>
+      <button class="hb" id="tCapture" type="button" data-app>Takes: press start and end</button>
     </div>
     <h3>Key test</h3>
     <div class="keytest" id="keytest">Press a key or turn your knob. The last key the page heard shows here.</div>
@@ -586,10 +614,12 @@ kbd {
     <div class="grp" id="gTakes" hidden>
       <button class="hb" id="prevBeat" type="button" aria-label="Previous line">‹</button>
       <button class="hb rec" id="takeBtn" type="button">● Take</button>
+      <div class="vu" id="vu" title="Microphone level" hidden><i></i></div>
       <button class="hb good" id="goodBtn" type="button">✓ Good</button>
       <button class="hb ng" id="ngBtn" type="button">✕ Scratch</button>
       <button class="hb" id="nextBeat" type="button" aria-label="Next line">›</button>
       <div class="readout">
+        <span class="opt" id="rScriptWrap" hidden>Script<b id="rScript">1/1</b></span>
         <span class="opt">Line<b id="rLine">1</b></span>
         <span>Got<b id="rGot">0/0 (0%)</b></span>
       </div>
@@ -631,10 +661,11 @@ kbd {
 
   const DEFAULTS = {
     size: 64, width: 82, lead: 1.35, eye: 30, mirror: false, flip: false, count: true, speed: 70,
-    mode: "scroll", split: "para", advance: true, fps: "25", zero: "auto", amode: "good", selectsOnly: false
+    mode: "scroll", split: "para", advance: true, fps: "25", zero: "auto", amode: "good", selectsOnly: false, capture: "press"
   };
 
   let store = load();
+  store.queue = Array.isArray(store.queue) ? store.queue : [];
   function load() {
     try {
       const raw = localStorage.getItem(KEY);
@@ -705,19 +736,46 @@ kbd {
     const list = $("list");
     list.innerHTML = '<div class="label">Scripts</div>';
     [...store.scripts].sort((a, b) => b.updated - a.updated).forEach((s) => {
-      const b = document.createElement("button");
-      b.type = "button";
+      const q = store.queue.indexOf(s.id);
+      const b = document.createElement("div");
       b.className = "item" + (s.id === store.current ? " active" : "");
+      b.setAttribute("role", "button"); b.tabIndex = 0;
       const w = words(s.body);
       const lg = store.logs[s.id];
       const takes = lg ? lg.takes.length : 0;
-      b.innerHTML = '<span class="t"></span><span class="m"></span>';
+      b.innerHTML = '<span class="t"></span><span class="m"></span><button type="button" class="qbtn"></button>';
       b.querySelector(".t").textContent = s.title || "Untitled";
       b.querySelector(".m").textContent = w + " words · " + fmt((w / 140) * 60) + (takes ? " · " + takes + " takes" : "");
-      b.addEventListener("click", () => { store.current = s.id; save(); renderAll(); });
+      const qb = b.querySelector(".qbtn");
+      qb.textContent = q >= 0 ? String(q + 1) : "+";
+      qb.classList.toggle("on", q >= 0);
+      qb.title = q >= 0 ? "Remove from the filming queue" : "Add to the filming queue";
+      qb.setAttribute("aria-label", qb.title);
+      const pick = () => { store.current = s.id; save(); renderAll(); };
+      b.addEventListener("click", (e) => { if (!e.target.closest(".qbtn")) pick(); });
+      b.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target === b) { e.preventDefault(); pick(); } });
+      qb.addEventListener("click", (e) => { e.stopPropagation(); toggleQueue(s.id); });
       list.appendChild(b);
     });
+    renderQueue();
   }
+  function toggleQueue(id) {
+    const i = store.queue.indexOf(id);
+    if (i >= 0) store.queue.splice(i, 1); else store.queue.push(id);
+    store.queuePos = 0; save(); renderList();
+  }
+  function renderQueue() {
+    store.queue = store.queue.filter((id) => store.scripts.some((x) => x.id === id));
+    const q = store.queue;
+    $("queueBar").hidden = !q.length;
+    if (q.length) {
+      const names = q.map((id) => (store.scripts.find((x) => x.id === id) || {}).title || "Untitled");
+      $("queueText").innerHTML = "<b>" + q.length + (q.length === 1 ? " script" : " scripts")+ ":</b> " + names.map(() => "<span></span>").join("<i>›</i>");
+      [...$("queueText").querySelectorAll("span")].forEach((el, i) => { el.textContent = names[i]; });
+    }
+    $("promptBtn").textContent = q.length > 1 ? "▶ Prompt " + q.length + " scripts" : "▶ Prompt";
+  }
+  $("queueClear").addEventListener("click", () => { store.queue = []; store.queuePos = 0; save(); renderList(); });
   function renderStats() {
     const s = cur();
     const w = words(s.body);
@@ -774,9 +832,13 @@ kbd {
     });
   }
   twoTap($("delBtn"), "Delete", () => {
-    delete store.logs[store.current];
-    store.sessions.filter((m) => m.scriptId === store.current).forEach((m) => idbDelete(m.id).catch(() => {}));
-    store.sessions = store.sessions.filter((m) => m.scriptId !== store.current);
+    const gone = store.current;
+    delete store.logs[gone];
+    store.queue = store.queue.filter((id) => id !== gone);
+    store.sessions.forEach((m) => { if (m.scriptIds) m.scriptIds = m.scriptIds.filter((id) => id !== gone); });
+    const dead = store.sessions.filter((m) => (m.scriptIds ? !m.scriptIds.length : m.scriptId === gone));
+    dead.forEach((m) => idbDelete(m.id).catch(() => {}));
+    store.sessions = store.sessions.filter((m) => !dead.includes(m));
     store.scripts = store.scripts.filter((s) => s.id !== store.current);
     if (!store.scripts.length) store.scripts.push({ id: "s" + Date.now().toString(36), title: "New script", body: "", updated: Date.now() });
     store.current = store.scripts[0].id; save(); renderAll();
@@ -866,11 +928,30 @@ kbd {
       const gotText = got + "/" + beats.length + " (" + (beats.length ? Math.round((got / beats.length) * 100) : 0) + "%)";
       if ($("rGot").textContent !== gotText) $("rGot").textContent = gotText;
       renderRec();
+      const marks = marksMode();
       const tb = $("takeBtn");
-      tb.classList.toggle("live", !!rec);
-      tb.textContent = rec ? "■ Stop " + fmt((Date.now() - rec.start) / 1000) : "● Take";
-      P.classList.toggle("recording", !!rec);
-      if (rec && !statusT) setStatus("● REC  L" + rec.beat + "  T" + rec.take + "  " + fmt((Date.now() - rec.start) / 1000), "rec");
+      tb.hidden = marks;
+      const vu = $("vu");
+      vu.hidden = !marks || !recSess;
+      if (marks) {
+        if (recSess) {
+          const h = Math.min(100, Math.round(Math.sqrt(Math.min(1, VAD.level / 0.3)) * 100));
+          vu.firstElementChild.style.height = h + "%";
+          vu.classList.toggle("hot", VAD.speaking);
+        }
+        P.classList.toggle("recording", !!recSess && VAD.speaking);
+        if (recSess && VAD.speaking && VAD.open && !statusT)
+          setStatus("● L" + (beats[bi] ? beats[bi].n : "") + "  ·  " + fmt(Math.max(0, (recPos() || 0) - VAD.open.voiceStart)), "rec");
+      } else {
+        tb.classList.toggle("live", !!rec);
+        tb.textContent = rec ? "■ Stop " + fmt((Date.now() - rec.start) / 1000) : "● Take";
+        P.classList.toggle("recording", !!rec);
+        if (rec && !statusT) setStatus("● REC  L" + rec.beat + "  T" + rec.take + "  " + fmt((Date.now() - rec.start) / 1000), "rec");
+      }
+      if (playlist.length > 1) {
+        const st = (qi + 1) + "/" + playlist.length;
+        if ($("rScript").textContent !== st) $("rScript").textContent = st;
+      }
     }
   }
 
@@ -947,6 +1028,7 @@ kbd {
         if (bi > startOfMine) i = startOfMine;
         else { i = Math.max(0, startOfMine - 1); while (i > 0 && secOf(i - 1) === secOf(startOfMine - 1)) i--; }
       }
+      if (i === bi) { goScript(qi + (dir > 0 ? 1 : -1), dir < 0); return; }
       goBeat(i);
       return;
     }
@@ -974,6 +1056,12 @@ kbd {
     if (!b) { setStatus("NO LINES IN THIS SCRIPT", ""); return; }
     const takes = takesFor(b.n);
     const goods = takes.filter((t) => t.mark === "good").length;
+    if (marksMode()) {
+      if (!recSess) { setStatus("L" + b.n + "  ·  TAP REC TO LISTEN FOR TAKES", ""); return; }
+      if (VAD.pending) { setStatus("L" + b.n + "  ·  HEARD " + fmt(VAD.pending.end - VAD.pending.start) + "  ·  PRESS TO MARK", "listen"); return; }
+      setStatus("L" + b.n + "  ·  LISTENING  ·  NEXT T" + (takes.length + 1) + (goods ? "  ·  GOT IT" : ""), "");
+      return;
+    }
     setStatus("L" + b.n + "  ·  NEXT T" + (takes.length + 1) + (goods ? "  ·  GOT IT" : ""), goods ? "" : "");
   }
   const takesFor = (n) => logFor(cur().id).takes.filter((t) => t.beat === n);
@@ -993,7 +1081,10 @@ kbd {
   }
   function goBeat(i) {
     if (!beats.length) return;
+    if (i >= beats.length && goScript(qi + 1, false)) return;
+    if (i < 0 && goScript(qi - 1, true)) return;
     if (rec) stopTake();
+    if (marksMode()) flushPending();
     const prev = bi;
     bi = Math.max(0, Math.min(beats.length - 1, i));
     renderTag(prev); renderTag(bi);
@@ -1005,7 +1096,7 @@ kbd {
     if (!b) return;
     const lg = logFor(cur().id);
     const take = takesFor(b.n).length + 1;
-    const entry = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5), beat: b.n, take, section: b.section, text: b.text, start: Date.now(), end: null, mark: null };
+    const entry = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5), scriptId: cur().id, beat: b.n, take, section: b.section, text: b.text, start: Date.now(), end: null, mark: null };
     if (recSess) { entry.sid = recSess.meta.id; entry.rs = recPos(); }
     lg.takes.push(entry);
     rec = entry;
@@ -1014,13 +1105,23 @@ kbd {
   function stopTake() {
     if (!rec) return;
     rec.end = Date.now();
-    if (rec.sid && recSess && recSess.meta.id === rec.sid) rec.re = recPos();
+    if (rec.sid && recSess && recSess.meta.id === rec.sid) {
+      rec.re = recPos();
+      // where speech actually sat inside the pressed take
+      const segs = VAD.segs.concat(VAD.open ? [{ voiceStart: VAD.open.voiceStart, voiceEnd: VAD.open.lastVoice }] : [])
+        .filter((g) => g.voiceEnd > rec.rs - 0.3 && g.voiceStart < rec.re + 0.3);
+      if (segs.length) {
+        rec.vs = Math.max(rec.rs, Math.min(...segs.map((g) => g.voiceStart)));
+        rec.ve = Math.min(rec.re, Math.max(...segs.map((g) => g.voiceEnd)));
+      }
+    }
     const i = beats.findIndex((b) => b.n === rec.beat);
     rec = null;
     save(); renderTag(i); idleStatus(); showHud(true);
   }
   function toggleTake() { rec ? stopTake() : startTake(); }
   function markTake(mark) {
+    if (marksMode()) return markAttempt(mark);
     const b = beats[bi];
     if (!b) return;
     if (rec) stopTake();
@@ -1029,12 +1130,53 @@ kbd {
     if (!t) { setStatus("NO TAKE ON L" + b.n + " YET", "note", 1600); return; }
     t.mark = t.mark === mark ? null : mark;
     save(); renderTag(bi);
+    afterMark(t);
+  }
+  function afterMark(t) {
+    const b = beats[bi];
     if (t.mark === "good") {
       setStatus("✓ L" + b.n + " T" + t.take + " GOOD", "good", 1200);
-      if (S.advance && bi < beats.length - 1) setTimeout(() => goBeat(bi + 1), 450);
+      if (S.advance) setTimeout(() => goBeat(bi + 1), 450);
     } else if (t.mark === "ng") setStatus("✕ L" + b.n + " T" + t.take + " SCRATCH", "rec", 1200);
     else setStatus("L" + b.n + " T" + t.take + " UNMARKED", "note", 1200);
     if (!$("logSheet").hidden) renderLog();
+  }
+  /* Marks-only capture: Cueline listens for each attempt; a press marks the attempt just finished. */
+  function createTake(a, auto) {
+    const b = beats[bi];
+    if (!b || !recSess) return null;
+    const lg = logFor(cur().id);
+    const take = takesFor(b.n).length + 1;
+    const base = recSess.meta.created;
+    const entry = {
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5), scriptId: cur().id, beat: b.n, take, section: b.section, text: b.text,
+      start: base + Math.round(a.start * 1000), end: base + Math.round(a.end * 1000), mark: null,
+      sid: recSess.meta.id, rs: +a.start.toFixed(3), re: +a.end.toFixed(3), vs: +a.voiceStart.toFixed(3), ve: +a.voiceEnd.toFixed(3), auto: !!auto,
+    };
+    lg.takes.push(entry);
+    save(); renderTag(bi);
+    return entry;
+  }
+  function flushPending() {
+    const a = VAD.pending; VAD.pending = null;
+    if (a && a.end - a.start >= 1.5 && takeMode()) createTake(a, true);
+  }
+  function markAttempt(mark) {
+    const b = beats[bi];
+    if (!b) return;
+    if (!recSess) { setStatus("TAP REC FIRST  ·  MARKS ONLY LISTENS FOR TAKES", "note", 2400); return; }
+    let a = null;
+    if (VAD.open) {
+      a = VAD.open; VAD.open = null; VAD.speaking = false; VAD.on = 0;
+      a.voiceEnd = a.lastVoice; a.end = Math.max(a.lastVoice + 0.2, a.start + 0.3);
+      VAD.segs.push(a);
+    } else a = VAD.pending;
+    VAD.pending = null;
+    if (!a) { setStatus("NOTHING HEARD FOR L" + b.n + " YET", "note", 1600); return; }
+    const t = createTake(a, false);
+    if (!t) return;
+    t.mark = mark; save(); renderTag(bi);
+    afterMark(t);
   }
   function slate() {
     const lg = logFor(cur().id);
@@ -1275,12 +1417,69 @@ kbd {
   }
 
   /* ---- capture ---- */
-  const WORKLET = "class C extends AudioWorkletProcessor{constructor(){super();this.r=sampleRate/16000;this.ph=0;this.s=0;this.c=0;this.b=new Int16Array(8000);this.n=0;this.pk=0;this.port.onmessage=e=>{if(e.data==='flush'){this.post(true);}};}" +
-    "post(f){if(this.n===0){if(f)this.port.postMessage({pcm:new ArrayBuffer(0),peak:0,flushed:true});return;}const o=this.b.slice(0,this.n);this.port.postMessage({pcm:o.buffer,peak:this.pk,flushed:!!f},[o.buffer]);this.n=0;this.pk=0;}" +
-    "process(inputs){const ch=inputs[0]&&inputs[0][0];if(!ch)return true;for(let i=0;i<ch.length;i++){this.s+=ch[i];this.c++;this.ph+=1;if(this.ph>=this.r){this.ph-=this.r;let v=this.s/this.c;this.s=0;this.c=0;const a=v<0?-v:v;if(a>this.pk)this.pk=a;v=v>1?1:v<-1?-1:v;this.b[this.n++]=v<0?v*32768:v*32767;if(this.n===this.b.length)this.post(false);}}return true;}}" +
+  const WORKLET = "class C extends AudioWorkletProcessor{constructor(){super();this.r=sampleRate/16000;this.ph=0;this.s=0;this.c=0;this.b=new Int16Array(800);this.n=0;this.port.onmessage=e=>{if(e.data==='flush'){this.post(true);}};}" +
+    "post(f){if(this.n===0){if(f)this.port.postMessage({pcm:new ArrayBuffer(0),flushed:true});return;}const o=this.b.slice(0,this.n);this.port.postMessage({pcm:o.buffer,flushed:!!f},[o.buffer]);this.n=0;}" +
+    "process(inputs){const ch=inputs[0]&&inputs[0][0];if(!ch)return true;for(let i=0;i<ch.length;i++){this.s+=ch[i];this.c++;this.ph+=1;if(this.ph>=this.r){this.ph-=this.r;let v=this.s/this.c;this.s=0;this.c=0;v=v>1?1:v<-1?-1:v;this.b[this.n++]=v<0?v*32768:v*32767;if(this.n===this.b.length)this.post(false);}}return true;}}" +
     "registerProcessor('cueline-cap',C);";
   let recSess = null;
-  const recPos = () => recSess ? (recSess.samples + Math.min(0.6, (performance.now() - recSess.lastPostAt) / 1000) * SR) / SR : null;
+  const recPos = () => recSess ? (recSess.samples + Math.min(0.2, (performance.now() - recSess.lastPostAt) / 1000) * SR) / SR : null;
+  const marksMode = () => S.capture === "marks" && CAN_REC;
+  let playlist = [], qi = 0;
+
+  /* ---- listening: adaptive speech detection on 50 ms frames ---- */
+  const VAD = { floor: 0.003, level: 0, speaking: false, on: 0, off: 0, open: null, pending: null, segs: [] };
+  function vadReset() { Object.assign(VAD, { floor: 0.003, level: 0, speaking: false, on: 0, off: 0, open: null, pending: null, segs: [] }); }
+  function vadFrame(pcm, at) {
+    let sum = 0;
+    for (let i = 0; i < pcm.length; i++) { const v = pcm[i] / 32768; sum += v * v; }
+    const rms = Math.sqrt(sum / pcm.length);
+    VAD.level = rms;
+    const thr = Math.max(VAD.floor * 3.5, 0.004);
+    const end = at + pcm.length / SR;
+    if (rms > thr) { VAD.on++; VAD.off = 0; }
+    else {
+      VAD.off++; VAD.on = 0;
+      if (!VAD.speaking) VAD.floor = rms < VAD.floor ? VAD.floor * 0.7 + rms * 0.3 : VAD.floor * 0.99 + rms * 0.01;
+    }
+    if (!VAD.speaking) {
+      if (VAD.on >= 3) {
+        VAD.speaking = true;
+        VAD.open = { start: Math.max(0, at - 0.25), voiceStart: Math.max(0, at - 0.1), lastVoice: end };
+        onAttemptStart();
+      }
+    } else {
+      if (rms > thr) VAD.open.lastVoice = end;
+      if (VAD.off >= 18) closeAttempt();           // 0.9 s of quiet ends the attempt
+    }
+  }
+  function closeAttempt() {
+    const a = VAD.open; VAD.open = null; VAD.speaking = false; VAD.on = 0;
+    if (!a) return;
+    a.voiceEnd = a.lastVoice;
+    a.end = Math.max(a.lastVoice + 0.2, a.start + 0.3);
+    VAD.segs.push(a); if (VAD.segs.length > 300) VAD.segs.shift();
+    if (marksMode() && takeMode() && a.voiceEnd - a.voiceStart >= 0.4) { VAD.pending = a; idleStatus(); }
+  }
+  function onAttemptStart() { if (marksMode() && takeMode()) flushPending(); }
+  if (/[?&]debug=1/.test(location.search)) window.__cueline = { sess: () => recSess, VAD, store, playlist: () => playlist };
+
+  /* ---- playlist: the knob rolls from one queued script into the next ---- */
+  function goScript(i, atEnd) {
+    if (i < 0 || i >= playlist.length || i === qi) return false;
+    if (rec) stopTake();
+    if (marksMode()) flushPending();
+    qi = i; store.current = playlist[i]; store.queuePos = i; save();
+    cancelCountdown(); playing = false; v = 0; nudge = 0; nudgeV = 0; y = 0;
+    build();
+    bi = atEnd ? Math.max(0, beats.length - 1) : 0;
+    applyLayout();
+    if (!takeMode() && atEnd) { y = maxY; paint(); }
+    if (recSess && !recSess.meta.scriptIds.includes(store.current)) { recSess.meta.scriptIds.push(store.current); save(); }
+    $("rScriptWrap").hidden = playlist.length <= 1;
+    const label = "Script " + (i + 1) + "/" + playlist.length + " · " + (cur().title || "Untitled");
+    if (takeMode()) { idleStatus(); setStatus(label.toUpperCase().slice(0, 60), "note", 2000); } else toast(label);
+    return true;
+  }
 
   function flushChunks(sess) {
     if (!sess.pendingSamples) return sess.flushing;
@@ -1308,20 +1507,35 @@ kbd {
       const mute = ctx.createGain(); mute.gain.value = 0;
       ctx.createMediaStreamSource(stream).connect(node); node.connect(mute); mute.connect(ctx.destination);
       await ctx.resume();
-      const meta = { id: "r" + Date.now().toString(36), scriptId: cur().id, title: cur().title, created: Date.now(), samples: 0, chunks: 0, state: "recording" };
+      const meta = { id: "r" + Date.now().toString(36), scriptId: cur().id, scriptIds: [cur().id], title: cur().title, created: Date.now(), samples: 0, chunks: 0, state: "recording", gaps: [], capture: S.capture || "press" };
       store.sessions.push(meta); save();
-      const sess = { meta, ctx, stream, node, pending: [], pendingSamples: 0, samples: 0, lastPostAt: performance.now(), peak: 0, flushing: Promise.resolve(), onFlushed: null };
+      const sess = { meta, ctx, stream, node, pending: [], pendingSamples: 0, samples: 0, lastPostAt: performance.now(), ctx0: ctx.currentTime, wall0: performance.now(), driftRef: null, flushing: Promise.resolve(), onFlushed: null };
+      vadReset();
       node.port.onmessage = (e) => {
         const pcm = new Int16Array(e.data.pcm);
         if (pcm.length) {
+          // a pause in the audio clock (screen lock, app switch, a call) becomes silence, so the file stays in real time
+          const drift = (performance.now() - sess.wall0) / 1000 - (ctx.currentTime - sess.ctx0);
+          if (sess.driftRef == null) sess.driftRef = drift;
+          const jump = drift - sess.driftRef;
+          if (jump > 0.25) {
+            const fill = new Int16Array(Math.round(jump * SR));
+            sess.meta.gaps.push({ at: +(sess.samples / SR).toFixed(3), seconds: +jump.toFixed(3) });
+            sess.pending.push(fill); sess.pendingSamples += fill.length; sess.samples += fill.length;
+            sess.driftRef = drift;
+            if (VAD.open) closeAttempt();
+            save();
+          } else if (jump < -0.25) sess.driftRef = drift;
+          const at = sess.samples / SR;
           sess.pending.push(pcm); sess.pendingSamples += pcm.length;
-          sess.samples += pcm.length; sess.lastPostAt = performance.now(); sess.peak = e.data.peak;
+          sess.samples += pcm.length; sess.lastPostAt = performance.now();
+          vadFrame(pcm, at);
           if (sess.pendingSamples >= SR * 5) flushChunks(sess);
         }
         if (e.data.flushed && sess.onFlushed) sess.onFlushed();
       };
       recSess = sess;
-      setStatus("● RECORDING SESSION", "rec", 1400);
+      setStatus(marksMode() ? "● RECORDING  ·  LISTENING FOR TAKES" : "● RECORDING SESSION", "rec", 1400);
     } catch (err) {
       stream.getTracks().forEach((t) => t.stop());
       try { ctx && ctx.close(); } catch (e) {}
@@ -1333,6 +1547,7 @@ kbd {
   async function stopRecording() {
     if (!recSess) return null;
     if (rec) stopTake();
+    if (marksMode()) { if (VAD.open) closeAttempt(); flushPending(); }
     const sess = recSess;
     await new Promise((res) => { const t = setTimeout(res, 500); sess.onFlushed = () => { clearTimeout(t); res(); }; sess.node.port.postMessage("flush"); });
     recSess = null;
@@ -1340,7 +1555,8 @@ kbd {
     sess.stream.getTracks().forEach((t) => t.stop());
     try { await sess.ctx.close(); } catch (e) {}
     sess.meta.state = "done"; save();
-    renderRec();
+    vadReset();
+    renderRec(); idleStatus();
     return sess.meta;
   }
 
@@ -1359,8 +1575,11 @@ kbd {
   }
 
   /* ---- session helpers ---- */
-  const sessionsFor = (scriptId) => store.sessions.filter((m) => m.scriptId === scriptId).sort((a, b) => b.created - a.created);
-  const sessTakes = (meta) => logFor(meta.scriptId).takes.filter((t) => t.sid === meta.id && t.rs != null && t.re != null).sort((a, b) => a.rs - b.rs);
+  const sessScripts = (meta) => (meta.scriptIds && meta.scriptIds.length ? meta.scriptIds : [meta.scriptId]);
+  const sessionsFor = (scriptId) => store.sessions.filter((m) => sessScripts(m).includes(scriptId)).sort((a, b) => b.created - a.created);
+  const sessTakes = (meta) => sessScripts(meta)
+    .flatMap((id) => logFor(id).takes.filter((t) => t.sid === meta.id && t.rs != null && t.re != null).map((t) => { if (!t.scriptId) t.scriptId = id; return t; }))
+    .sort((a, b) => a.rs - b.rs);
   function rangesFor(meta, mode) {
     const total = meta.samples / SR;
     if (mode === "full") return [{ take: null, a: 0, b: total }];
@@ -1518,7 +1737,7 @@ kbd {
       const inF = origin + Math.round(t.start * fps), outF = origin + Math.round(t.end * fps);
       const a = tcFromFrames(inF, base), b = tcFromFrames(inF + 1, base);
       const color = t.mark === "good" ? "ResolveColorGreen" : t.mark === "scratch" ? "ResolveColorRed" : "ResolveColorBlue";
-      const label = (t.slate + (t.accuracy != null ? " " + pct(t.accuracy) : "") + " - " + t.script).replace(/\|/g, "/").slice(0, 90);
+      const label = ((t.label || t.slate) + (t.accuracy != null ? " " + pct(t.accuracy) : "") + " - " + t.script).replace(/\|/g, "/").slice(0, 90);
       out += String(n).padStart(3, "0") + "  001      V     C        " + a + " " + b + " " + a + " " + b + "  \n";
       out += " |C:" + color + " |M:" + label + " |D:" + Math.max(1, outF - inF) + "\n\n";
     });
@@ -1526,18 +1745,19 @@ kbd {
   }
   function csvFor(items) {
     const q = (v) => '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"';
-    const rows = [["slate", "line", "section", "take", "mark", "start", "end", "start_s", "end_s", "accuracy", "script", "said"]];
-    items.forEach((t) => rows.push([t.slate, t.line, t.section, t.take, t.mark || "", hms(t.start), hms(t.end), t.start, t.end,
-      t.accuracy == null ? "" : t.accuracy, t.script, t.said || ""]));
+    const rows = [["slate", "script_title", "line", "section", "take", "mark", "start", "end", "start_s", "end_s", "speech_start_s", "speech_end_s", "accuracy", "script", "said"]];
+    items.forEach((t) => rows.push([t.slate, t.scriptTitle || "", t.line, t.section, t.take, t.mark || "", hms(t.start), hms(t.end), t.start, t.end,
+      t.speechStart == null ? "" : t.speechStart, t.speechEnd == null ? "" : t.speechEnd, t.accuracy == null ? "" : t.accuracy, t.script, t.said || ""]));
     return rows.map((r) => r.map(q).join(",")).join("\n") + "\n";
   }
   function srtFor(items) {
     let n = 0, out = "";
     const cue = (a, b, text) => { n++; out += n + "\n" + hms(a, ",") + " --> " + hms(Math.max(b, a + 0.4), ",") + "\n" + text + "\n\n"; };
     items.forEach((t) => {
-      if (!t.words.length) { cue(t.start, t.end, "[" + t.slate + "] " + t.script); return; }
+      const tag = "[" + (t.label || t.slate) + "] ";
+      if (!t.words.length) { cue(t.start, t.end, tag + t.script); return; }
       let group = [];
-      const flush = (first) => { if (!group.length) return; cue(group[0].start, group[group.length - 1].end, (first ? "[" + t.slate + "] " : "") + group.map((w) => w.text).join(" ")); group = []; };
+      const flush = (first) => { if (!group.length) return; cue(group[0].start, group[group.length - 1].end, (first ? tag : "") + group.map((w) => w.text).join(" ")); group = []; };
       let first = true;
       t.words.forEach((w) => {
         if (group.length && (group.length >= 8 || w.end - group[0].start > 3.2)) { flush(first); first = false; }
@@ -1552,11 +1772,13 @@ kbd {
   let building = false;
 
   async function buildPackage(meta, mode, transcribe, includeFull, onProg) {
-    const script = store.scripts.find((s) => s.id === meta.scriptId) || { title: meta.title, body: "" };
-    const lineList = beatsOf(parse(script.body), S.split);
+    const scripts = sessScripts(meta).map((id) => store.scripts.find((x) => x.id === id) || { id, title: meta.title || "Script", body: "" });
+    const multi = scripts.length > 1;
+    const short = (t) => String(t || "Script").replace(/^Example: /, "").slice(0, 24);
+    const lineLists = new Map(scripts.map((sc) => [sc.id, beatsOf(parse(sc.body), S.split)]));
     onProg(0.02, "Reading the recording…");
     const chunks = await idbChunks(meta.id);
-    const total = chunks.reduce((s, c) => s + c.length, 0);
+    const total = chunks.reduce((n, c) => n + c.length, 0);
     if (!total) throw errOf("empty", "This recording has no audio saved.");
     meta.samples = total;
     const ranges = rangesFor(meta, mode);
@@ -1571,7 +1793,7 @@ kbd {
       onProg(0.05, "Uploading " + dur(audio.seconds) + " of audio…");
       const url = await aaiUpload(audio.blob, (f) => onProg(0.05 + f * 0.45, "Uploading… " + pct(f)));
       onProg(0.52, "Sent. Waiting for AssemblyAI…");
-      tx = await aaiTranscribe(url, script.body, (msg) => onProg(0.7, msg));
+      tx = await aaiTranscribe(url, scripts.map((sc) => sc.body).join("\n"), (msg) => onProg(0.7, msg));
     }
 
     onProg(0.85, "Reconciling the script with what you said…");
@@ -1588,15 +1810,19 @@ kbd {
     });
     const inAudio = new Set(audio.segs.map((g) => g.take && g.take.id).filter(Boolean));
     const items = takes.map((t) => {
+      const sc = scripts.find((x) => x.id === t.scriptId) || scripts[0];
       const ws = byTake.get(t.id) || [];
       const said = ws.map((w) => w.text).join(" ");
       const transcribed = !!tx && (mode === "full" || inAudio.has(t.id));
       const cmp = transcribed ? compare(t.text, said) : null;
       const mark = t.mark === "good" ? "good" : t.mark === "ng" ? "scratch" : null;
+      const slate = "L" + t.beat + " T" + t.take + (mark ? " " + mark.toUpperCase() : "");
       return {
-        slate: "L" + t.beat + " T" + t.take + (mark ? " " + mark.toUpperCase() : ""),
-        takeId: t.id, line: t.beat, take: t.take, section: t.section || "", mark,
+        slate, label: multi ? short(sc.title) + " · " + slate : slate,
+        takeId: t.id, scriptId: sc.id, scriptTitle: sc.title, line: t.beat, take: t.take, section: t.section || "", mark,
         start: +t.rs.toFixed(3), end: +t.re.toFixed(3),
+        speechStart: t.vs != null ? +t.vs.toFixed(3) : null, speechEnd: t.ve != null ? +t.ve.toFixed(3) : null,
+        auto: !!t.auto,
         script: t.text, said: transcribed ? said : null,
         accuracy: cmp ? +cmp.accuracy.toFixed(3) : null,
         missed: cmp ? cmp.missed : [], extra: cmp ? cmp.extra : [],
@@ -1605,79 +1831,91 @@ kbd {
     });
 
     // per-line summary and flags
-    const lines = lineList.map((l) => {
-      const ts = items.filter((t) => t.line === l.n);
+    const lines = [];
+    scripts.forEach((sc) => lineLists.get(sc.id).forEach((l) => {
+      const ts = items.filter((t) => t.scriptId === sc.id && t.line === l.n);
       const good = ts.filter((t) => t.mark === "good");
       const pool = good.length ? good : ts.filter((t) => t.mark !== "scratch");
       const best = pool.slice().sort((x, y) => (y.accuracy || 0) - (x.accuracy || 0) || y.take - x.take)[0] || null;
-      return { line: l.n, section: l.section || "", script: l.text, takes: ts.length, goodTakes: good.length, bestTake: best ? best.take : null };
-    });
+      lines.push({ scriptId: sc.id, scriptTitle: sc.title, label: (multi ? short(sc.title) + " · " : "") + "L" + l.n,
+        line: l.n, section: l.section || "", script: l.text, takes: ts.length, goodTakes: good.length, bestTake: best ? best.take : null });
+    }));
     const flags = [];
     items.forEach((t) => {
       if (t.mark === "good" && t.accuracy != null && t.accuracy < 0.85)
-        flags.push({ slate: t.slate, text: "Marked good, but only " + pct(t.accuracy) + " matches the script" + (t.missed.length ? " (missed: " + t.missed.slice(0, 5).join(", ") + ")" : "") + "." });
+        flags.push({ slate: t.label, text: "Marked good, but only " + pct(t.accuracy) + " matches the script" + (t.missed.length ? " (missed: " + t.missed.slice(0, 5).join(", ") + ")" : "") + "." });
     });
     lines.forEach((l) => {
       if (l.takes && !l.goodTakes) {
-        const cands = items.filter((t) => t.line === l.line && t.accuracy != null).sort((x, y) => y.accuracy - x.accuracy);
-        flags.push({ slate: "L" + l.line, text: "No good take" + (cands.length ? "; closest is T" + cands[0].take + " at " + pct(cands[0].accuracy) : "") + "." });
-      } else if (!l.takes) flags.push({ slate: "L" + l.line, text: "Not filmed in this recording." });
+        const cands = items.filter((t) => t.scriptId === l.scriptId && t.line === l.line && t.accuracy != null).sort((x, y) => y.accuracy - x.accuracy);
+        flags.push({ slate: l.label, text: "No good take" + (cands.length ? "; closest is T" + cands[0].take + " at " + pct(cands[0].accuracy) : "") + "." });
+      } else if (!l.takes) flags.push({ slate: l.label, text: "Not filmed in this recording." });
     });
 
     // files
     onProg(0.9, "Building the package…");
     const JSZip = await loadScript(JSZIP_URL, "JSZip");
     const zip = new JSZip();
-    const name = "cueline-" + safeName(script.title) + "-" + new Date(meta.created).toISOString().slice(0, 16).replace(/[:T]/g, "-");
+    const stampStr = new Date(meta.created).toISOString().slice(0, 16).replace(/[:T]/g, "-");
+    const name = multi ? "cueline-session-" + stampStr : "cueline-" + safeName(scripts[0].title) + "-" + stampStr;
+    const sessionTitle = multi ? scripts.map((sc) => sc.title).join(" + ") : scripts[0].title;
     const modeLabel = { good: "good takes only", clean: "everything except scratch takes", full: "the full recording" }[mode];
     const audioFile = mode === "full" ? "audio/full-recording.wav" : "audio/" + (mode === "good" ? "good-takes" : "clean-takes") + ".wav";
     const selects = items.filter((t) => t.mark === "good");
     const session = {
-      format: "cueline-session/1",
-      script: { title: script.title, text: script.body },
+      format: "cueline-session/2",
+      script: { title: scripts[0].title, text: scripts[0].body },
+      scripts: scripts.map((sc) => ({ id: sc.id, title: sc.title, text: sc.body })),
       session: {
         id: meta.id, recordedAt: new Date(meta.created).toISOString(), durationSeconds: +(total / SR).toFixed(3), sampleRate: SR,
-        timeBase: "All start/end values are seconds from the start of the full recording.",
+        timeBase: "All start/end values are seconds from the start of the full recording. Pauses in the audio clock were filled with silence; see gaps.",
+        capture: meta.capture || "press",
+        gaps: (meta.gaps || []).map((g) => ({ at: g.at, seconds: g.seconds })),
         fullRecording: full ? "audio/full-recording.wav" : null,
         transcribedAudio: { file: audioFile, contents: modeLabel, durationSeconds: +audio.seconds.toFixed(3),
-          segments: audio.segs.map((g) => ({ slate: g.take ? (items.find((t) => t.takeId === g.take.id) || {}).slate || null : null, recordingStart: +g.src.toFixed(3), fileStart: +g.out.toFixed(3), duration: +g.len.toFixed(3) })) },
+          segments: audio.segs.map((g) => ({ slate: g.take ? (items.find((t) => t.takeId === g.take.id) || {}).label || null : null, recordingStart: +g.src.toFixed(3), fileStart: +g.out.toFixed(3), duration: +g.len.toFixed(3) })) },
       },
       transcription: tx ? { provider: "AssemblyAI", id: tx.id, language: tx.language_code || null, audio: modeLabel } : null,
-      summary: { lines: lines.length, linesWithGoodTake: lines.filter((l) => l.goodTakes).length, takes: items.length, goodTakes: selects.length, flags },
+      summary: { scripts: scripts.length, lines: lines.length, linesWithGoodTake: lines.filter((l) => l.goodTakes).length, takes: items.length, goodTakes: selects.length, flags },
       lines, takes: items, betweenTakes: loose,
     };
     zip.file("session.json", JSON.stringify(session, null, 2));
 
-    let md = "# " + script.title + "\n\nRecorded " + new Date(meta.created).toLocaleString() + " · " + dur(total / SR) + " · " + items.length + " takes · " +
+    let md = "# " + sessionTitle + "\n\nRecorded " + new Date(meta.created).toLocaleString() + " · " + dur(total / SR) + " · " + items.length + " takes · " +
       lines.filter((l) => l.goodTakes).length + "/" + lines.length + " lines got\n" + (tx ? "Transcribed: " + modeLabel + " (AssemblyAI)\n" : "Not transcribed\n");
+    if (meta.gaps && meta.gaps.length) md += "Recording paused " + meta.gaps.length + (meta.gaps.length === 1 ? " time" : " times") + " (filled with silence): " + meta.gaps.map((g) => hms(g.at) + " for " + g.seconds.toFixed(1) + " s").join(", ") + "\n";
     if (flags.length) md += "\n## Check these\n\n" + flags.map((f) => "- **" + f.slate + "**: " + f.text).join("\n") + "\n";
-    let section = null;
-    items.slice().sort((x, y) => x.line - y.line || x.take - y.take).forEach((t) => {
-      if (t.section !== section) { section = t.section; md += "\n## " + (section || "Untitled section") + "\n"; }
-      md += "\n### " + t.slate + " · " + hms(t.start) + " to " + hms(t.end) + (t.accuracy != null ? " · " + pct(t.accuracy) + " match" : "") + "\n\n";
-      md += "Script: " + t.script + "\n\n";
-      if (t.said != null) md += "Said: " + (t.said || "(nothing heard)") + "\n";
-      if (t.missed.length) md += "\nMissed: " + t.missed.join(", ") + "\n";
+    scripts.forEach((sc) => {
+      if (multi) md += "\n# " + sc.title + "\n";
+      let section = null;
+      items.filter((t) => t.scriptId === sc.id).sort((x, y) => x.line - y.line || x.take - y.take).forEach((t) => {
+        if (t.section !== section) { section = t.section; md += "\n## " + (section || "Untitled section") + "\n"; }
+        md += "\n### " + t.slate + " · " + hms(t.start) + " to " + hms(t.end) + (t.accuracy != null ? " · " + pct(t.accuracy) + " match" : "") + (t.auto ? " · heard, not marked" : "") + "\n\n";
+        md += "Script: " + t.script + "\n\n";
+        if (t.said != null) md += "Said: " + (t.said || "(nothing heard)") + "\n";
+        if (t.missed.length) md += "\nMissed: " + t.missed.join(", ") + "\n";
+      });
     });
     zip.file("transcript.md", md);
     zip.file("transcript.srt", srtFor(items));
     zip.file("takes.csv", csvFor(items));
-    zip.file("markers.edl", edlFor(items, script.title));
+    zip.file("markers.edl", edlFor(items, sessionTitle));
     zip.file("selects.csv", csvFor(selects));
-    zip.file("selects.edl", edlFor(selects, script.title + " selects"));
+    zip.file("selects.edl", edlFor(selects, sessionTitle + " selects"));
     zip.file(audioFile, audio.blob, { compression: "STORE" });
     if (full && mode !== "full") zip.file("audio/full-recording.wav", full.blob, { compression: "STORE" });
     zip.file("README.txt", [
-      "Cueline session package: " + script.title,
+      "Cueline session package: " + sessionTitle,
       "",
-      "session.json     Everything, for indexing: script, every take with its slate, mark, times, what was said, word timestamps and match score.",
+      "session.json     Everything, for indexing: script(s), every take with its slate, mark, times, what was said, word timestamps and match score.",
       "transcript.md    Readable transcript, one heading per take, slates written in.",
       "transcript.srt   Captions on the full-recording timeline, each take starting with its slate.",
       "takes.csv        One row per take.  selects.csv / selects.edl: good takes only.",
       "markers.edl      Resolve timeline markers for every take (green good, red scratch, blue unmarked).",
       "audio/           " + (full ? "full-recording.wav is the whole session. " : "") + (mode !== "full" ? audioFile.slice(6) + " holds only " + modeLabel + " with 1 s gaps; session.json maps it back." : ""),
       "",
-      "Times are seconds from the start of the full recording.",
+      "Times are seconds from the start of the full recording. If the iPad paused the recording (screen lock, a call),",
+      "that pause was filled with silence so the file stays in real time; session.json lists each pause under gaps.",
       "To line up with camera footage in DaVinci Resolve: put full-recording.wav on a timeline at 01:00:00:00,",
       "add the camera clips, select them all and use Auto Sync Audio > Based on Waveform. Then import markers.edl",
       "(Timeline > Import > Timeline Markers from EDL).",
@@ -1699,7 +1937,7 @@ kbd {
     const keep = sid || sel.value;
     sel.innerHTML = list.length ? list.map((m) => {
       const label = new Date(m.created).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) +
-        " · " + dur(m.samples / SR) + " · " + sessTakes(m).length + " takes" + (m.state === "recording" ? " (recording)" : m.state === "interrupted" ? " (interrupted)" : "");
+        " · " + dur(m.samples / SR) + " · " + sessTakes(m).length + " takes" + (sessScripts(m).length > 1 ? " · " + sessScripts(m).length + " scripts" : "") + (m.state === "recording" ? " (recording)" : m.state === "interrupted" ? " (interrupted)" : "");
       return '<option value="' + m.id + '"' + (m.id === keep ? " selected" : "") + (m.state === "recording" ? " disabled" : "") + ">" + esc(label) + "</option>";
     }).join("") : '<option value="">No recordings for this script yet</option>';
     const meta = store.sessions.find((m) => m.id === sel.value);
@@ -1718,7 +1956,7 @@ kbd {
     $("aaiRelay").value = S.aaiRelay || "";
     $("aaiLang").value = S.aaiLang || "en";
     $("sessSum").textContent = meta ? (() => {
-      const ts = sessTakes(meta), lines = beatsOf(parse((store.scripts.find((s) => s.id === meta.scriptId) || {}).body || ""), S.split).length;
+      const ts = sessTakes(meta), lines = sessScripts(meta).reduce((n, id) => n + beatsOf(parse((store.scripts.find((x) => x.id === id) || {}).body || ""), S.split).length, 0);
       const got = new Set(ts.filter((t) => t.mark === "good").map((t) => t.beat)).size;
       return ts.length + " takes · " + ts.filter((t) => t.mark === "good").length + " good · " + got + "/" + lines + " lines got";
     })() : "Tap Record session in take mode to record your next shoot.";
@@ -1968,8 +2206,8 @@ kbd {
         case "ArrowDown": startHold(e, 1, 1); break;
         case "ArrowUp": startHold(e, -1, 1); break;
         case " ": case "Enter": case "k": case "K": if (!e.repeat) togglePlay(); break;
-        case "PageDown": jumpCue(1); break;
-        case "PageUp": jumpCue(-1); break;
+        case "PageDown": if (y >= maxY - 2 && goScript(qi + 1, false)) break; jumpCue(1); break;
+        case "PageUp": if (y <= 1 && goScript(qi - 1, true)) break; jumpCue(-1); break;
         case "Home": case "r": case "R": nudge = -y; break;
         case "End": nudge = maxY - y; break;
         case "=": case "+": speed(speedStep()); break;
@@ -2004,7 +2242,7 @@ kbd {
     const wasLong = press.long;
     press = null;
     e.preventDefault();
-    if (!wasLong && takeMode() && !P.hidden) toggleTake();
+    if (!wasLong && takeMode() && !P.hidden) { if (marksMode()) markAttempt("good"); else toggleTake(); }
   }
   document.addEventListener("keydown", onKeyDown);
   document.addEventListener("keyup", onKeyUp);
@@ -2085,6 +2323,7 @@ kbd {
     closeSheets();
     build(); applyLayout(); idleStatus();
     if (m !== "takes") $("status").hidden = true;
+    if (m === "takes" && marksMode() && !recSess) startRecording();
   }
   function textSize(delta) {
     const keepFrac = maxY ? y / maxY : 0;
@@ -2126,6 +2365,8 @@ kbd {
     $("tFlip").classList.toggle("on", S.flip);
     $("tCount").classList.toggle("on", S.count);
     $("tAdvance").classList.toggle("on", S.advance);
+    $("tCapture").textContent = "Takes: " + (S.capture === "marks" ? "marks only (listens)" : "press start and end");
+    $("tCapture").classList.toggle("on", S.capture === "marks");
     $("tSplit").textContent = "Split: " + (S.split === "line" ? "each line" : "paragraphs");
     $("mScroll").classList.toggle("on", !takeMode());
     $("mTakes").classList.toggle("on", takeMode());
@@ -2135,6 +2376,16 @@ kbd {
   }
   const tog = (id, key) => $(id).addEventListener("click", (e) => { e.stopPropagation(); S[key] = !S[key]; save(); applyLayout(); P.focus({ preventScroll: true }); });
   tog("tMirror", "mirror"); tog("tFlip", "flip"); tog("tCount", "count"); tog("tAdvance", "advance");
+  function setCapture(c) {
+    if (c === "marks" && !CAN_REC) return;
+    if (marksMode()) flushPending();
+    S.capture = c; save(); syncControls(); idleStatus();
+    if (c === "marks") {
+      setStatus("MARKS ONLY  ·  PRESS = GOOD  ·  DOUBLE PRESS = SCRATCH", "note", 2600);
+      if (!recSess && takeMode() && !P.hidden) startRecording();
+    }
+  }
+  $("tCapture").addEventListener("click", (e) => { e.stopPropagation(); setCapture(S.capture === "marks" ? "press" : "marks"); P.focus({ preventScroll: true }); });
   $("tSplit").addEventListener("click", (e) => {
     e.stopPropagation();
     if (rec) stopTake();
@@ -2182,9 +2433,16 @@ kbd {
     y = 0; v = 0; nudge = 0; nudgeV = 0; holdV = 0; playing = false; bi = 0; rec = null;
     P.classList.remove("focus", "peek");
     closeSheets();
+    playlist = store.queue.filter((id) => store.scripts.some((x) => x.id === id));
+    if (!playlist.length) playlist = [cur().id];
+    // a fresh queue starts at the top; reopening mid-day resumes where the prompter was
+    qi = Math.max(0, Math.min(store.queuePos || 0, playlist.length - 1));
+    if (playlist[qi] !== cur().id) { store.current = playlist[qi]; save(); }
+    $("rScriptWrap").hidden = playlist.length <= 1;
     build();
     applyLayout();
     idleStatus();
+    if (takeMode() && marksMode() && !recSess) startRecording();
     requestAnimationFrame(measure);
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if (!P.hidden) measure(); });
     P.focus({ preventScroll: true });
@@ -2210,7 +2468,7 @@ kbd {
     try {
       if (document.fullscreenElement || document.webkitFullscreenElement) (document.exitFullscreen || document.webkitExitFullscreen).call(document);
     } catch (e) {}
-    renderList();
+    renderAll();
   }
   $("promptBtn").addEventListener("click", openPrompter);
   window.addEventListener("resize", () => { if (!P.hidden) applyLayout(); });
