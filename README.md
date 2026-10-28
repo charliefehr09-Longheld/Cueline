@@ -32,6 +32,8 @@ Some browsers refuse to send files straight to AssemblyAI. In that case deploy [
 
 `https://charliefehr09-longheld.github.io/Cueline/#cue1=` followed by base64url of the raw-DEFLATE-compressed JSON `{"t": title, "b": body}`.
 
+QR codes use a denser-friendly form: `CUE2:` followed by base45 (RFC 9285) of the same compressed JSON, which fits QR's alphanumeric mode and gives a smaller code. Cueline reads both. Scanning uses [zxing-wasm](https://github.com/Sec-ant/zxing-wasm) (MIT), bundled in `vendor/`.
+
 ## Controls
 
 | Key | Scroll mode | Take mode |

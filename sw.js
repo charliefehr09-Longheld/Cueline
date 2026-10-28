@@ -1,12 +1,13 @@
-const CACHE = "cueline-v7";
+const CACHE = "cueline-v8";
 const CORE = ["./", "index.html", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png"];
 const LIBS = [
   "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js",
   "https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js",
   "https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js",
 ];
+const LOCAL = ["vendor/zxing-reader.js", "vendor/zxing_reader.wasm"];
 self.addEventListener("install", (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(CORE).then(() => Promise.all(LIBS.map((u) => c.add(u).catch(() => {})))))
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(CORE).then(() => Promise.all(LIBS.concat(LOCAL).map((u) => c.add(u).catch(() => {})))))
     .then(() => self.skipWaiting()));
 });
 self.addEventListener("activate", (e) => {
